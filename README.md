@@ -30,7 +30,7 @@
     cd realsense-ros/
     git checkout `git tag | sort -V | grep -P "^2.\d+\.\d+" | tail -1`
     ```
-    change device PID to add support for D405
+    change device PID to add support for D405 in file ```realsense-ros/realsense2_camera/include/constants.h```
     ```cpp
     // const uint16_t RS405_PID        = 0x0b0c; // DS5U
     const uint16_t RS405_PID    = 0x0B5B; // DS5U
@@ -64,8 +64,8 @@ source devel/setup.bash
 # activate can port
 cd <piper_ros>
 bash find_all_can_port.sh # output should look like 1-4.3:1.0, 1-4.4:1.0
-bash can_activate.sh can_left 1000000 "1-4.3:1.0"
-bash can_activate.sh can_right 1000000 "1-4.4:1.0"
+bash can_activate.sh can_left 1000000 "1-2:1.0"
+bash can_activate.sh can_right 1000000 "1-1:1.0"
 ```
 
 ### 2.3 Launch teleoperation nodes
@@ -163,3 +163,9 @@ roslaunch piper_bridge start_robot_all.launch ranger_can_port:=can0 left_can_por
 - `enable_rviz`: Enable RViz (default: `true`)
 
 **Note:** Use command `rs-enumerate-devices` to find all connected cameras and get their USB port IDs from the `Physical Port` field. The output should contain a line like: `Physical Port: /sys/devices/pci0000:00/0000:00:14.0/usb2/2-1/2-1:1.0/video4linux/video8`. Extract the `2-1` part and use it as the `usb_port_id` parameter.
+
+## 4. Record Data
+
+```bash
+rosbag record -O demo_001.bag --bz2 -b 4096 /robot/arm_left/end_pose /robot/arm_right/end_pose /robot/arm_left/joint_states_single /robot/arm_right/joint_states_single /robot/arm_left/pos_cmd /robot/arm_right/pos_cmd /teleop/arm_left/end_pose /teleop/arm_right/end_pose /teleop/arm_left/joint_states_single /teleop/arm_right/joint_states_single  /realsense_left/color/image_raw/compressed /realsense_right/color/image_raw/compressed /realsense_top/color/image_raw/compressed /realsense_left/aligned_depth_to_color/image_raw/compressed /realsense_right/aligned_depth_to_color/image_raw/compressed /realsense_top/aligned_depth_to_color/image_raw/compressed /realsense_left/color/camera_info /realsense_right/color/camera_info /realsense_top/color/camera_info /realsense_left/aligned_depth_to_color/camera_info /realsense_right/aligned_depth_to_color/camera_info /realsense_top/aligned_depth_to_color/camera_info
+```

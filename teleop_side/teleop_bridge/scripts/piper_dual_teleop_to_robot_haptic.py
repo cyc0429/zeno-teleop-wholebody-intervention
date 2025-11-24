@@ -22,7 +22,6 @@ from geometry_msgs.msg import Pose, PoseStamped
 from tf.transformations import quaternion_from_euler  # 用于欧拉角到四元数的转换
 import numpy as np
 
-
 def check_ros_master():
     try:
         rosnode.rosnode_ping("rosout", max_count=1, verbose=False)
@@ -147,11 +146,120 @@ class C_PiperRosNode:
         # 创建piper类并打开can接口
         self.piper = C_PiperInterface(can_name=self.can_port)
         self.piper.ConnectPort()
-        self.piper.MotionCtrl_2(0x01, 0x01, 30, 0)
+        # 设置为MIT模式以支持JointMitCtrl
+        self.piper.MotionCtrl_2(0x01, 0x01, 30, 0xAD)  # MIT mode
         self.block_ctrl_flag = False
+        
+        # MIT控制参数
+        self.mit_kp = rospy.get_param("~mit_kp", 10.0)  # 比例增益，默认10
+        self.mit_kd = rospy.get_param("~mit_kd", 0.8)   # 微分增益，默认0.8
+        
+        # 订阅robot side的数据
+        robot_topic_prefix = f"/robot/arm_{arm_type}/"
+        
+        # 订阅重力补偿力矩
+        self.gravity_torque_sub = rospy.Subscriber(
+            robot_topic_prefix + "joint_torques_compensated",
+            JointState,
+            self.gravity_torque_callback,
+            queue_size=1,
+            tcp_nodelay=True
+        )
+        
+        # 订阅robot side的关节状态（包含总力矩：重力补偿+环境交互）
+        self.robot_joint_state_sub = rospy.Subscriber(
+            robot_topic_prefix + "joint_states_single",
+            JointState,
+            self.robot_joint_state_callback,
+            queue_size=1,
+            tcp_nodelay=True
+        )
+        
+        # 存储数据（线程安全）
+        self.gravity_torques_lock = threading.Lock()
+        self.gravity_torques = [0.0] * 6  # 6个关节的重力补偿力矩
+        self.robot_joint_state_lock = threading.Lock()
+        self.robot_joint_positions = [0.0] * 6  # 6个关节的位置
+        self.robot_joint_velocities = [0.0] * 6  # 6个关节的速度
+        self.robot_joint_efforts = [0.0] * 6  # 6个关节的总力矩
+        
+        # 控制线程
+        self.control_thread = None
+        self.control_thread_running = False
+        
+        rospy.loginfo("[%s] Subscribing to: %s", self.arm_type, robot_topic_prefix + "joint_torques_compensated")
+        rospy.loginfo("[%s] Subscribing to: %s", self.arm_type, robot_topic_prefix + "joint_states_single")
+        rospy.loginfo("[%s] MIT control parameters: kp=%.2f, kd=%.2f", self.arm_type, self.mit_kp, self.mit_kd)
 
     def GetEnableFlag(self):
         return self.__enable_flag
+    
+    def gravity_torque_callback(self, msg):
+        """重力补偿力矩回调函数"""
+        if len(msg.effort) >= 6:
+            with self.gravity_torques_lock:
+                self.gravity_torques = list(msg.effort[:6])
+    
+    def robot_joint_state_callback(self, msg):
+        """Robot side关节状态回调函数"""
+        if len(msg.position) >= 6 and len(msg.velocity) >= 6 and len(msg.effort) >= 6:
+            with self.robot_joint_state_lock:
+                self.robot_joint_positions = list(msg.position[:6])
+                self.robot_joint_velocities = list(msg.velocity[:6])
+                self.robot_joint_efforts = list(msg.effort[:6])
+    
+    def ControlThread(self):
+        """MIT控制线程，使用JointMitCtrl进行控制"""
+        rate = rospy.Rate(200)  # 200 Hz，与发布频率一致
+        
+        while not rospy.is_shutdown() and self.control_thread_running:
+            if self.block_ctrl_flag or not self.__enable_flag:
+                rate.sleep()
+                continue
+            
+            # 获取robot side的数据
+            with self.robot_joint_state_lock:
+                robot_positions = self.robot_joint_positions[:]
+                robot_velocities = self.robot_joint_velocities[:]
+                robot_efforts = self.robot_joint_efforts[:]
+            
+            with self.gravity_torques_lock:
+                gravity_torques = self.gravity_torques[:]
+            
+            # 计算环境交互力矩 = 总力矩 - 重力补偿力矩
+            # robot_efforts 包含重力补偿力矩 + 环境交互力矩
+            interaction_torques = [robot_efforts[i] - gravity_torques[i] for i in range(6)]
+            
+            # 计算目标力矩 = 重力补偿力矩 + 环境交互力矩（用于力反馈）
+            # 重力补偿力矩用于抵消重力，使得在自由空间中可以自由拖动
+            # 环境交互力矩用于反馈给操作者，使其感受到与环境交互的力
+            target_torques = [gravity_torques[i] + interaction_torques[i] for i in range(6)]
+            
+            # 限制力矩范围到[-18.0, 18.0] N·m
+            for i in range(6):
+                target_torques[i] = max(-18.0, min(18.0, target_torques[i]))
+            
+            # 限制位置和速度范围
+            for i in range(6):
+                robot_positions[i] = max(-12.5, min(12.5, robot_positions[i]))
+                robot_velocities[i] = max(-45.0, min(45.0, robot_velocities[i]))
+            
+            # 使用JointMitCtrl控制每个关节
+            try:
+                for motor_num in range(1, 7):
+                    joint_idx = motor_num - 1
+                    self.piper.JointMitCtrl(
+                        motor_num=motor_num,
+                        pos_ref=robot_positions[joint_idx],
+                        vel_ref=robot_velocities[joint_idx],
+                        kp=self.mit_kp,
+                        kd=self.mit_kd,
+                        t_ref=target_torques[joint_idx]
+                    )
+            except Exception as e:
+                rospy.logerr("[%s] Error in JointMitCtrl: %s", self.arm_type, str(e))
+            
+            rate.sleep()
 
     def Pubilsh(self):
         """机械臂消息发布"""
@@ -194,6 +302,13 @@ class C_PiperRosNode:
             if elapsed_time_flag:
                 print("程序自动使能超时,退出程序")
                 exit(0)
+            
+            # 启动控制线程（如果还未启动）
+            if self.control_thread is None or not self.control_thread.is_alive():
+                self.control_thread_running = True
+                self.control_thread = threading.Thread(target=self.ControlThread, daemon=True)
+                self.control_thread.start()
+                rospy.loginfo("[%s] MIT control thread started", self.arm_type)
 
             # 发布消息
             self.PublishArmState()
@@ -426,11 +541,19 @@ class C_PiperRosNode:
         rospy.loginfo(f"-----------------------GOZERO---------------------------")
         rospy.loginfo(f"piper go zero .")
         rospy.loginfo(f"-----------------------GOZERO---------------------------")
+        # 停止控制线程
+        self.control_thread_running = False
         if req.is_mit_mode:
             self.piper.MotionCtrl_2(0x01, 0x01, 50, 0xAD)
+            # 使用MIT模式回零
+            for motor_num in range(1, 7):
+                self.piper.JointMitCtrl(motor_num=motor_num, pos_ref=0.0, vel_ref=0.0, 
+                                       kp=self.mit_kp, kd=self.mit_kd, t_ref=0.0)
         else:
             self.piper.MotionCtrl_2(0x01, 0x01, 50, 0)
-        self.piper.JointCtrl(0, 0, 0, 0, 0, 0)
+            self.piper.JointCtrl(0, 0, 0, 0, 0, 0)
+        # 重新启动控制线程
+        self.control_thread_running = True
         response.status = True
         response.code = 151001
         rospy.loginfo(f"Returning GoZeroResponse: {response.status}, {response.code}")
