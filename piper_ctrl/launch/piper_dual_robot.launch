@@ -17,7 +17,7 @@
   <!-- Right arm node -->
   <node name="piper_ctrl_right_node" pkg="piper_ctrl" type="piper_ctrl_node.py" output="screen">
     <rosparam file="$(find piper_ctrl)/config/piper_ctrl_mit.yaml" command="load"/>
-    <param name="can_port" value="$(arg left_can_port)"/>
+    <param name="can_port" value="$(arg right_can_port)"/>
     <param name="topic_prefix" value="$(arg robot_prefix_right)"/>
     <remap from="$(arg robot_prefix_right)joint_pos_cmd" to="$(arg teleop_prefix_right)joint_states_single"/>
   </node>
