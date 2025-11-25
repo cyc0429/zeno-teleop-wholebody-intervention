@@ -21,7 +21,7 @@
 	</group>
 
 	<!-- Launch dual-arm teleop node -->
-	<group if="$(arg enable_dual_arm)">
+	<!-- <group if="$(arg enable_dual_arm)">
 		<group if="$(arg enable_haptic_feedback)">
 			<node name="piper_dual_teleop_to_robot_node_haptic" pkg="teleop_bridge" type="piper_dual_teleop_to_robot_haptic.py" output="screen">
 				<param name="left_can_port" value="$(arg left_can_port)" />
@@ -40,5 +40,16 @@
 				<param name="girpper_exist" value="$(arg girpper_exist)" />
 			</node>
 		</group>
+	</group> -->
+
+	<group if="$(arg enable_dual_arm)">
+		<include file="$(find piper_ctrl)/launch/piper_dual_teleop.launch">
+			<arg name="left_can_port" value="$(arg left_can_port)" />
+			<arg name="right_can_port" value="$(arg right_can_port)" />
+			<arg name="robot_prefix_left" value="/robot/arm_left/" />
+			<arg name="robot_prefix_right" value="/robot/arm_right/" />
+			<arg name="teleop_prefix_left" value="/teleop/arm_left/" />
+			<arg name="teleop_prefix_right" value="/teleop/arm_right/" />
+		</include>
 	</group>
 </launch>

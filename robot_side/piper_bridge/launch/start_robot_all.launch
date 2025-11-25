@@ -70,14 +70,25 @@
   </group>
   
   <!-- Launch dual-arm control node -->
-  <group if="$(arg enable_dual_arm)">
-    <node name="piper_dual_ctrl_node" pkg="teleop_bridge" type="piper_dual_ctrl_node.py" output="screen">
+  <!-- <group if="$(arg enable_dual_arm)">
+    <node name="piper_dual_ctrl_node" pkg="piper_bridge" type="piper_dual_ctrl_node.py" output="screen">
       <param name="left_can_port" value="$(arg left_can_port)" />
       <param name="right_can_port" value="$(arg right_can_port)" />
       <param name="auto_enable" value="$(arg auto_enable)" />
       <param name="gripper_val_mutiple" value="$(arg gripper_val_mutiple)" />
       <param name="girpper_exist" value="$(arg girpper_exist)" />
     </node>
+  </group> -->
+
+  <group if="$(arg enable_dual_arm)">
+    <include file="$(find piper_ctrl)/launch/piper_dual_robot.launch">
+      <arg name="left_can_port" value="$(arg left_can_port)" />
+      <arg name="right_can_port" value="$(arg right_can_port)" />
+      <arg name="robot_prefix_left" value="/robot/arm_left/" />
+      <arg name="robot_prefix_right" value="/robot/arm_right/" />
+      <arg name="teleop_prefix_left" value="/teleop/arm_left/" />
+      <arg name="teleop_prefix_right" value="/teleop/arm_right/" />
+    </include>
   </group>
   
   <!-- Launch cameras -->
