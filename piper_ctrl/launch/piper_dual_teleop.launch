@@ -7,7 +7,7 @@
   <arg name="teleop_prefix_right" default="/teleop/arm_right/" />
 
   <!-- Left arm node -->
-  <node name="piper_ctrl_left_node" pkg="piper_ctrl" type="piper_ctrl_node.py" output="screen">
+  <node name="piper_teleop_left_node" pkg="piper_ctrl" type="piper_ctrl_node.py" output="screen">
     <rosparam file="$(find piper_ctrl)/config/piper_ctrl_mit.yaml" command="load"/>
     <param name="can_port" value="$(arg left_can_port)"/>
     <param name="topic_prefix" value="$(arg teleop_prefix_left)"/>
@@ -17,7 +17,7 @@
   </node>
   
   <!-- Right arm node -->
-  <node name="piper_ctrl_right_node" pkg="piper_ctrl" type="piper_ctrl_node.py" output="screen">
+  <node name="piper_teleop_right_node" pkg="piper_ctrl" type="piper_ctrl_node.py" output="screen">
     <rosparam file="$(find piper_ctrl)/config/piper_ctrl_mit.yaml" command="load"/>
     <param name="can_port" value="$(arg left_can_port)"/>
     <param name="topic_prefix" value="$(arg teleop_prefix_right)"/>
