@@ -75,6 +75,10 @@ After setup, launch all teleoperation nodes in a single command:
 ```bash
 source devel/setup.bash
 roslaunch teleop_bridge start_teleop_all.launch left_can_port:=can_left right_can_port:=can_right auto_enable:=true enable_paddle:=true enable_dual_arm:=true
+
+or
+
+roslaunch teleop_bridge start_teleop_all.launch left_can_port:=can_left right_can_port:=can_right auto_enable:=true enable_paddle:=false enable_dual_arm:=true
 ```
 
 **Parameters:**
@@ -120,6 +124,11 @@ After setup, launch all robot nodes in a single command:
 ```bash
 source devel/setup.bash
 roslaunch piper_bridge start_robot_all.launch ranger_can_port:=can0 left_can_port:=can_left right_can_port:=can_right enable_ranger:=true enable_paddle2ranger:=true enable_dual_arm:=true enable_cameras:=true enable_rviz:=true camera_left_usb_port:=2-1 camera_right_usb_port:=2-8 camera_top_usb_port:=2-2
+roslaunch piper_bridge start_robot_all.launch ranger_can_port:=can0 left_can_port:=can_left right_can_port:=can_right enable_ranger:=false enable_paddle2ranger:=false enable_dual_arm:=true enable_cameras:=true enable_rviz:=true camera_left_usb_port:=2-1 camera_right_usb_port:=2-8 camera_top_usb_port:=2-2
+```
+
+```bash
+python src/zeno-wholebody-teleop/robot_side/piper_bridge/scripts/piper_gravity_compensation_node.py
 ```
 
 **Parameters:**

@@ -59,6 +59,18 @@ class C_PiperCtrlNode:
             self.gripper_val_mutiple = 1.0
         rospy.loginfo("Gripper value multiple: %.2f", self.gripper_val_mutiple)
 
+        self.enable_gripper = rospy.get_param("~enable_gripper", True)
+        rospy.loginfo("Enable gripper: %s", self.enable_gripper)
+
+        self.enable_gripper_haptic = rospy.get_param("~enable_gripper_haptic", False)
+        rospy.loginfo("Enable gripper haptic: %s", self.enable_gripper_haptic)
+
+        self.gripper_range = rospy.get_param("~gripper_range", 0.1)
+        rospy.loginfo("Gripper range: %.2f", self.gripper_range)
+
+        self.gripper_reverse = rospy.get_param("~gripper_reverse", False)
+        rospy.loginfo("Gripper reverse: %s", self.gripper_reverse)
+
         # Control mode parameters
         self.ctrl_mode = rospy.get_param("~ctrl_mode", "p").lower()
         if self.ctrl_mode not in ["p", "mit"]:
@@ -74,7 +86,7 @@ class C_PiperCtrlNode:
         # MIT control parameters
         self.mit_speed = rospy.get_param("~mit/speed", 50)
         self.mit_speed = max(0, min(100, self.mit_speed))
-        
+
         # kp parameter: can be a single value or a list of 6 values
         kp_param = rospy.get_param("~mit/kp", 10.0)
         if isinstance(kp_param, list):
@@ -85,7 +97,7 @@ class C_PiperCtrlNode:
                 self.mit_kp = [kp_param[0] if len(kp_param) > 0 else 10.0] * 6
         else:
             self.mit_kp = [float(kp_param)] * 6
-        
+
         # kd parameter: can be a single value or a list of 6 values
         kd_param = rospy.get_param("~mit/kd", 0.8)
         if isinstance(kd_param, list):
@@ -96,7 +108,7 @@ class C_PiperCtrlNode:
                 self.mit_kd = [kd_param[0] if len(kd_param) > 0 else 0.8] * 6
         else:
             self.mit_kd = [float(kd_param)] * 6
-        
+
         self.mit_enable_pos = rospy.get_param("~mit/enable_pos", True)
         self.mit_enable_vel = rospy.get_param("~mit/enable_vel", True)
         self.mit_enable_tor = rospy.get_param("~mit/enable_tor", True)
@@ -154,6 +166,16 @@ class C_PiperCtrlNode:
             )
             rospy.loginfo("Gravity compensation topic: %s", self.mit_joint_states_compensated_topic)
 
+        # Gripper command topic
+        self.gripper_pos_cmd_topic = ensure_topic_prefix("~gripper_pos_cmd_topic", "gripper_pos_cmd")
+        if self.enable_gripper:
+            rospy.loginfo("Gripper position command topic: %s", self.gripper_pos_cmd_topic)
+
+        # Gripper effort command topic
+        self.gripper_effort_cmd_topic = ensure_topic_prefix("~gripper_effort_cmd_topic", "gripper_effort_cmd")
+        if self.enable_gripper:
+            rospy.loginfo("Gripper effort command topic: %s", self.gripper_effort_cmd_topic)
+
         # Thread rate parameters
         self.publish_rate = rospy.get_param("~publish_rate", 200.0)
         self.control_rate = rospy.get_param("~control_rate", 200.0)
@@ -163,6 +185,23 @@ class C_PiperCtrlNode:
             self.publish_rate,
             self.control_rate,
             self.subscribe_rate,
+        )
+
+        # Filter parameters
+        self.filter_enable = rospy.get_param("~filter/enable", True)
+        self.filter_alpha_pos = rospy.get_param("~filter/alpha_position", 0.7)
+        self.filter_alpha_vel = rospy.get_param("~filter/alpha_velocity", 0.5)
+        self.filter_alpha_effort = rospy.get_param("~filter/alpha_effort", 0.5)
+        # Clamp alpha values to [0, 1]
+        self.filter_alpha_pos = max(0.0, min(1.0, self.filter_alpha_pos))
+        self.filter_alpha_vel = max(0.0, min(1.0, self.filter_alpha_vel))
+        self.filter_alpha_effort = max(0.0, min(1.0, self.filter_alpha_effort))
+        rospy.loginfo(
+            "Filter enabled: %s, alpha: pos=%.2f, vel=%.2f, effort=%.2f",
+            self.filter_enable,
+            self.filter_alpha_pos,
+            self.filter_alpha_vel,
+            self.filter_alpha_effort,
         )
 
         # Create piper interface
@@ -209,6 +248,18 @@ class C_PiperCtrlNode:
 
         self.gravity_torques_lock = threading.Lock()
         self.gravity_torques = [0.0] * 6
+
+        # Gripper command data storage (thread-safe)
+        self.gripper_cmd_lock = threading.Lock()
+        self.gripper_cmd_position = 0.0
+        self.gripper_cmd_effort = 0.0
+
+        # Filter state storage (thread-safe)
+        self.filter_lock = threading.Lock()
+        self.filtered_positions = [0.0] * 7
+        self.filtered_velocities = [0.0] * 7
+        self.filtered_efforts = [0.0] * 7
+        self.filter_initialized = False
 
         # Subscribers
         if self.ctrl_mode == "p":
@@ -259,6 +310,22 @@ class C_PiperCtrlNode:
 
         rospy.Subscriber(self.topic_prefix + "enable_flag", Bool, self.enable_callback, queue_size=1, tcp_nodelay=True)
 
+        # Gripper command subscriber
+        if self.enable_gripper:
+            rospy.Subscriber(
+                self.gripper_pos_cmd_topic, JointState, self.gripper_pos_cmd_callback, queue_size=1, tcp_nodelay=True
+            )
+            rospy.loginfo("Subscribing to gripper position command: %s", self.gripper_pos_cmd_topic)
+
+            rospy.Subscriber(
+                self.gripper_effort_cmd_topic,
+                JointState,
+                self.gripper_effort_cmd_callback,
+                queue_size=1,
+                tcp_nodelay=True,
+            )
+            rospy.loginfo("Subscribing to gripper effort command: %s", self.gripper_effort_cmd_topic)
+
         # Thread control flags
         self.publish_thread_running = False
         self.control_thread_running = False
@@ -294,6 +361,20 @@ class C_PiperCtrlNode:
         if len(msg.effort) >= 6:
             with self.gravity_torques_lock:
                 self.gravity_torques = list(msg.effort[:6])
+
+    def gripper_pos_cmd_callback(self, msg: JointState):
+        """Gripper command callback"""
+        if not self.block_ctrl_flag:
+            with self.gripper_cmd_lock:
+                if len(msg.position) >= 7:
+                    self.gripper_cmd_position = msg.position[6]
+
+    def gripper_effort_cmd_callback(self, msg: JointState):
+        """Gripper effort command callback"""
+        if not self.block_ctrl_flag:
+            with self.gripper_cmd_lock:
+                if len(msg.effort) >= 7:
+                    self.gripper_cmd_effort = msg.effort[6]
 
     def enable_callback(self, enable_flag: Bool):
         """Enable callback"""
@@ -350,12 +431,28 @@ class C_PiperCtrlNode:
         # self.piper.MotionCtrl_2(0x01, 0x01, self.p_speed, 0)
         self.piper.JointCtrl(joint_0, joint_1, joint_2, joint_3, joint_4, joint_5)
 
-        if self.gripper_exist and has_gripper:
-            joint_6 = round(gripper_pos * 1000 * 1000 * self.gripper_val_mutiple)
+        if self.enable_gripper and self.gripper_exist:
+            if has_gripper:
+                joint_6 = round(gripper_pos * 1000 * 1000 * self.gripper_val_mutiple)
+            else:
+                # Use gripper command if available
+                with self.gripper_cmd_lock:
+                    joint_6 = round(self.gripper_cmd_position * 1000 * 1000 * self.gripper_val_mutiple)
+
             joint_6 = max(0, min(80000, joint_6))
             if abs(joint_6) < 200:
                 joint_6 = 0
-            self.piper.GripperCtrl(abs(joint_6), 1000, 0x01, 0)
+
+            # Get effort from gripper command if haptic is enabled
+            if self.enable_gripper_haptic:
+                with self.gripper_cmd_lock:
+                    gripper_effort = abs(self.gripper_cmd_effort)
+                    gripper_effort = max(0, min(gripper_effort, 3))
+                    gripper_effort = round(gripper_effort * 1000)
+            else:
+                gripper_effort = round(1000 * 1.0)
+
+            self.piper.GripperCtrl(abs(joint_6), gripper_effort, 0x01, 0)
 
     def _mit_control(self):
         """MIT control implementation"""
@@ -403,6 +500,31 @@ class C_PiperCtrlNode:
                 )
         except Exception as e:
             rospy.logerr("Error in JointMitCtrl: %s", str(e))
+
+        # Gripper control for MIT mode
+        if self.enable_gripper and self.gripper_exist:
+            # Get gripper position from command
+            with self.gripper_cmd_lock:
+                gripper_pos = self.gripper_cmd_position
+
+            joint_6 = round(gripper_pos * 1000 * 1000 * self.gripper_val_mutiple)
+            joint_6 = max(0, min(80000, joint_6))
+            if abs(joint_6) < 200:
+                joint_6 = 0
+
+            # Get effort from gripper command if haptic is enabled
+            if self.enable_gripper_haptic:
+                with self.gripper_cmd_lock:
+                    gripper_effort = -self.gripper_cmd_effort
+                    gripper_effort = max(0, min(gripper_effort, 0.5))
+                    gripper_effort = round(gripper_effort * 1000)
+            else:
+                gripper_effort = round(3 * 1000)
+
+            if gripper_effort < 50:
+                self.piper.GripperCtrl(abs(joint_6), gripper_effort, 0x00, 0)
+            else:
+                self.piper.GripperCtrl(abs(joint_6), gripper_effort, 0x01, 0)
 
     # Publish thread
     def PublishThread(self):
@@ -459,7 +581,6 @@ class C_PiperCtrlNode:
         joint_3: float = (self.piper.GetArmJointMsgs().joint_state.joint_4 / 1000) * 0.017444
         joint_4: float = (self.piper.GetArmJointMsgs().joint_state.joint_5 / 1000) * 0.017444
         joint_5: float = (self.piper.GetArmJointMsgs().joint_state.joint_6 / 1000) * 0.017444
-        joint_6: float = self.piper.GetArmGripperMsgs().gripper_state.grippers_angle / 1000000
         vel_0: float = self.piper.GetArmHighSpdInfoMsgs().motor_1.motor_speed / 1000
         vel_1: float = self.piper.GetArmHighSpdInfoMsgs().motor_2.motor_speed / 1000
         vel_2: float = self.piper.GetArmHighSpdInfoMsgs().motor_3.motor_speed / 1000
@@ -472,17 +593,68 @@ class C_PiperCtrlNode:
         effort_3: float = self.piper.GetArmHighSpdInfoMsgs().motor_4.effort / 1000
         effort_4: float = self.piper.GetArmHighSpdInfoMsgs().motor_5.effort / 1000
         effort_5: float = self.piper.GetArmHighSpdInfoMsgs().motor_6.effort / 1000
-        effort_6: float = self.piper.GetArmGripperMsgs().gripper_state.grippers_effort / 1000
 
         with self.control_data_lock:
             self.current_joint_positions = [joint_0, joint_1, joint_2, joint_3, joint_4, joint_5]
             self.current_joint_velocities = [vel_0, vel_1, vel_2, vel_3, vel_4, vel_5]
             self.current_joint_efforts = [effort_0, effort_1, effort_2, effort_3, effort_4, effort_5]
 
+        # Get gripper data
+        if self.enable_gripper and self.gripper_exist:
+            joint_6: float = self.piper.GetArmGripperMsgs().gripper_state.grippers_angle / 1000000
+            if self.gripper_reverse:
+                joint_6 = self.gripper_range - joint_6
+            effort_6: float = self.piper.GetArmGripperMsgs().gripper_state.grippers_effort / 1000
+            raw_positions = [joint_0, joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
+            raw_velocities = [vel_0, vel_1, vel_2, vel_3, vel_4, vel_5, 0.0]
+            raw_efforts = [effort_0, effort_1, effort_2, effort_3, effort_4, effort_5, effort_6]
+        else:
+            raw_positions = [joint_0, joint_1, joint_2, joint_3, joint_4, joint_5]
+            raw_velocities = [vel_0, vel_1, vel_2, vel_3, vel_4, vel_5]
+            raw_efforts = [effort_0, effort_1, effort_2, effort_3, effort_4, effort_5]
+
+        # Apply filter if enabled
+        if self.filter_enable:
+            with self.filter_lock:
+                if not self.filter_initialized:
+                    # Initialize filter with current values
+                    self.filtered_positions = raw_positions[:]
+                    self.filtered_velocities = raw_velocities[:]
+                    self.filtered_efforts = raw_efforts[:]
+                    self.filter_initialized = True
+                else:
+                    # Apply low-pass filter (exponential moving average)
+                    # filtered = alpha * new + (1 - alpha) * previous
+                    for i in range(len(raw_positions)):
+                        self.filtered_positions[i] = (
+                            self.filter_alpha_pos * raw_positions[i]
+                            + (1.0 - self.filter_alpha_pos) * self.filtered_positions[i]
+                        )
+                    for i in range(len(raw_velocities)):
+                        self.filtered_velocities[i] = (
+                            self.filter_alpha_vel * raw_velocities[i]
+                            + (1.0 - self.filter_alpha_vel) * self.filtered_velocities[i]
+                        )
+                    for i in range(len(raw_efforts)):
+                        self.filtered_efforts[i] = (
+                            self.filter_alpha_effort * raw_efforts[i]
+                            + (1.0 - self.filter_alpha_effort) * self.filtered_efforts[i]
+                        )
+                # Use filtered values
+                filtered_positions = self.filtered_positions[:]
+                filtered_velocities = self.filtered_velocities[:]
+                filtered_efforts = self.filtered_efforts[:]
+        else:
+            # Use raw values without filtering
+            filtered_positions = raw_positions[:]
+            filtered_velocities = raw_velocities[:]
+            filtered_efforts = raw_efforts[:]
+
         self.joint_states.header.stamp = rospy.Time.now()
-        self.joint_states.position = [joint_0, joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
-        self.joint_states.velocity = [vel_0, vel_1, vel_2, vel_3, vel_4, vel_5, 0.0]
-        self.joint_states.effort = [effort_0, effort_1, effort_2, effort_3, effort_4, effort_5, effort_6]
+        self.joint_states.position = filtered_positions
+        self.joint_states.velocity = filtered_velocities
+        self.joint_states.effort = filtered_efforts
+
         self.joint_pub.publish(self.joint_states)
 
     def PublishArmEndPose(self):

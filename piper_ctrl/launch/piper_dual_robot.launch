@@ -12,6 +12,7 @@
     <param name="can_port" value="$(arg left_can_port)"/>
     <param name="topic_prefix" value="$(arg robot_prefix_left)"/>
     <remap from="$(arg robot_prefix_left)joint_pos_cmd" to="$(arg teleop_prefix_left)joint_states_single"/>
+    <remap from="$(arg robot_prefix_left)gripper_pos_cmd" to="$(arg teleop_prefix_left)joint_states_single"/>
   </node>
   
   <!-- Right arm node -->
@@ -20,5 +21,6 @@
     <param name="can_port" value="$(arg right_can_port)"/>
     <param name="topic_prefix" value="$(arg robot_prefix_right)"/>
     <remap from="$(arg robot_prefix_right)joint_pos_cmd" to="$(arg teleop_prefix_right)joint_states_single"/>
+    <remap from="$(arg robot_prefix_right)gripper_pos_cmd" to="$(arg teleop_prefix_right)joint_states_single"/>
   </node>
 </launch>

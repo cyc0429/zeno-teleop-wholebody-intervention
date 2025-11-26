@@ -4,8 +4,11 @@
     <rosparam file="$(find piper_ctrl)/config/piper_ctrl_mit_gravity.yaml" command="load"/>
     <param name="can_port" value="can_left"/>
     <param name="topic_prefix" value="/robot/arm_left/"/>
+    <param name="enable_gripper_haptic" value="true"/>
     <remap from="/robot/arm_left/joint_pos_cmd" to="/robot/arm_left/joint_states_single"/>
     <remap from="/robot/arm_left/joint_tor_cmd" to="/robot/arm_right/joint_states_single"/>
+    <remap from="/robot/arm_left/gripper_pos_cmd" to="/robot/arm_left/joint_states_single"/>
+    <remap from="/robot/arm_left/gripper_effort_cmd" to="/robot/arm_right/joint_states_single"/>
   </node>
   
   <!-- Right arm node -->
@@ -14,5 +17,6 @@
     <param name="can_port" value="can_right"/>
     <param name="topic_prefix" value="/robot/arm_right/"/>
     <remap from="/robot/arm_right/joint_pos_cmd" to="/robot/arm_left/joint_states_single"/>
+    <remap from="/robot/arm_right/gripper_pos_cmd" to="/robot/arm_left/joint_states_single"/>
   </node>
 </launch>

@@ -17,6 +17,22 @@ gripper_exist: true
 # Gripper value multiple, default 1.0
 gripper_val_mutiple: 1.0
 
+# Enable gripper control, default true
+enable_gripper: true
+
+# Enable gripper haptic control, default false
+# If true, gripper effort will be controlled from gripper_cmd topic
+enable_gripper_haptic: false
+
+gripper_range: 0.08
+
+gripper_reverse: true
+
+# Gripper command topic name (relative path, will automatically add topic_prefix as prefix)
+gripper_pos_cmd_topic: "gripper_pos_cmd"
+
+gripper_effort_cmd_topic: "gripper_effort_cmd"
+
 # Control mode
 # Control method: 'p' (position control) or 'mit' (MIT control)
 ctrl_mode: "mit" # Optional values: "p", "mit"
@@ -44,7 +60,7 @@ mit:
   # Derivative gain, can be a single value (applied to all joints) or a list of 6 values (one for each joint)
   # Single value example: kd: 0.05
   # List example: kd: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
-  kd: [0.1, 0.1, 0.01, 0.1, 0.1, 0.01]
+  kd: [0.1, 0.1, 0.01, 0.1, 0.1, 0.1]
 
   # Enable position control
   enable_pos: true
@@ -84,3 +100,18 @@ control_rate: 50.0
 
 # Subscribe thread rate (Hz)
 subscribe_rate: 50.0
+
+# Filter parameters for smoothing published data
+filter:
+  # Enable filter, default true
+  enable: true
+
+  # Filter alpha values (0.0-1.0), higher values = less smoothing but faster response
+  # alpha_position: smoothing factor for joint positions (default: 0.7)
+  alpha_position: 0.7
+
+  # alpha_velocity: smoothing factor for joint velocities (default: 0.5)
+  alpha_velocity: 0.5
+
+  # alpha_effort: smoothing factor for joint efforts (default: 0.5)
+  alpha_effort: 0.5

@@ -11,9 +11,12 @@
     <rosparam file="$(find piper_ctrl)/config/piper_ctrl_mit_gravity.yaml" command="load"/>
     <param name="can_port" value="$(arg left_can_port)"/>
     <param name="topic_prefix" value="$(arg teleop_prefix_left)"/>
+    <param name="enable_gripper_haptic" value="true"/>
     <remap from="$(arg teleop_prefix_left)joint_pos_cmd" to="$(arg teleop_prefix_left)joint_states_single"/>
     <remap from="$(arg teleop_prefix_left)joint_tor_cmd" to="$(arg robot_prefix_left)joint_states_single"/>
     <remap from="$(arg teleop_prefix_left)joint_states_compensated" to="$(arg robot_prefix_left)joint_states_compensated"/>
+    <remap from="$(arg teleop_prefix_left)gripper_pos_cmd" to="$(arg teleop_prefix_left)joint_states_single"/>
+    <remap from="$(arg teleop_prefix_left)gripper_effort_cmd" to="$(arg robot_prefix_left)joint_states_single"/>
   </node>
   
   <!-- Right arm node -->
@@ -21,8 +24,11 @@
     <rosparam file="$(find piper_ctrl)/config/piper_ctrl_mit_gravity.yaml" command="load"/>
     <param name="can_port" value="$(arg right_can_port)"/>
     <param name="topic_prefix" value="$(arg teleop_prefix_right)"/>
+    <param name="enable_gripper_haptic" value="true"/>
     <remap from="$(arg teleop_prefix_right)joint_pos_cmd" to="$(arg teleop_prefix_right)joint_states_single"/>
     <remap from="$(arg teleop_prefix_right)joint_tor_cmd" to="$(arg robot_prefix_right)joint_states_single"/>
     <remap from="$(arg teleop_prefix_right)joint_states_compensated" to="$(arg robot_prefix_right)joint_states_compensated"/>
+    <remap from="$(arg teleop_prefix_right)gripper_pos_cmd" to="$(arg teleop_prefix_right)joint_states_single"/>
+    <remap from="$(arg teleop_prefix_right)gripper_effort_cmd" to="$(arg robot_prefix_right)joint_states_single"/>
   </node>
 </launch>
