@@ -465,10 +465,12 @@ namespace damiao
             }
             auto &it = motors[motor_id];
 
+            std::cerr << "====================" << std::endl;
             // std::cerr << "write" << std::endl;
-            // std::cerr << "motor_id: " << motor_id << std::endl;
-            // std::cerr << "pos: " << m.second.cmd_pos << " vel: " << m.second.cmd_vel << " effort: " << m.second.cmd_effort << std::endl;
-            // std::cerr << "kp: " << m.second.kp << " kd: " << m.second.kd << std::endl;
+            std::cerr << "motor_id: " << motor_id << std::endl;
+            std::cerr << "cmd pos: " << m.second.cmd_pos << " cmd vel: " << m.second.cmd_vel << " cmd effort: " << m.second.cmd_effort << std::endl;
+            std::cerr << "pos: " << m.second.pos << " vel: " << m.second.vel << " effort: " << m.second.effort << std::endl;
+            std::cerr << "kp: " << m.second.kp << " kd: " << m.second.kd << std::endl;
             // std::cerr << "finishe write" << std::endl;
             control_mit(*it, m.second.kp, m.second.kd, m.second.cmd_pos, m.second.cmd_vel, m.second.cmd_effort); // control_mit(Motor &DM_Motor, float kp, float kd, float q, float dq, float tau)
         }
@@ -489,19 +491,13 @@ namespace damiao
             }
             auto &it = motors[motor_id];
 
-            // m.second.pos = it->Get_Position();
+            m.second.pos = it->Get_Position();
             // m.second.vel = it->Get_Velocity();
             // m.second.effort = it->Get_tau();
 
-            m.second.pos = it->Get_Position();
-            // std::cerr << " position: " << position << std::endl;
-
-            // std::cerr << "MotorType: " << motor_id << std::endl;
-            // std::cerr << "pos: " << m.second.pos << " vel: " << m.second.vel << " effort: " << m.second.effort << std::endl;
-
-            std::cerr << "====================" << std::endl;
-            std::cerr << m.first << std::endl;
-            std::cerr << "can_id " << m.second.can_id << std::endl;
+            // std::cerr << "====================" << std::endl;
+            // std::cerr << m.first << std::endl;
+            // std::cerr << "can_id " << m.second.can_id << std::endl;
             // std::cerr << "cmd_effort " << m.second.cmd_effort << std::endl;
             // std::cerr << "cmd_pos " << m.second.cmd_pos << std::endl;
             // std::cerr << "cmd_vel " << m.second.cmd_vel << std::endl;
@@ -509,10 +505,10 @@ namespace damiao
             // std::cerr << "kd " << m.second.kd << std::endl;
             // std::cerr << "kp " << m.second.kp << std::endl;
             // std::cerr << "motorType " << m.second.motorType << std::endl;
-            std::cerr << "mst_id " << m.second.mst_id << std::endl;
+            // std::cerr << "mst_id " << m.second.mst_id << std::endl;
             // std::cerr << "name " << m.second.name << std::endl;
-            std::cerr << "pos " << m.second.pos << std::endl;
-            std::cerr << "vel " << m.second.vel << std::endl;
+            // std::cerr << "pos " << m.second.pos << std::endl;
+            // std::cerr << "vel " << m.second.vel << std::endl;
 
             motor_positions[motor_id - 1] = m.second.pos;
         }

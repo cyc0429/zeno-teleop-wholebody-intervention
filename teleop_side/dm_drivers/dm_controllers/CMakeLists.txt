@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   pluginlib
   roscpp
   std_msgs
+  geometry_msgs
   dm_common
 )
 
@@ -114,6 +115,7 @@ catkin_package(
   pluginlib 
   roscpp 
   std_msgs 
+  geometry_msgs
   dm_common
 #  DEPENDS system_lib
 )
