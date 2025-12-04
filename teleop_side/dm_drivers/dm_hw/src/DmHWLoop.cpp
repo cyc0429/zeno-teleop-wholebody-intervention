@@ -9,6 +9,7 @@ Modified Copyright (c) 2024-2025, Dm Robotics.
 
 #include "dm_hw/DmHWLoop.h"
 #include <geometry_msgs/Twist.h>
+#include <dm_hw/MotorState.h>
 
 namespace damiao
 {
@@ -35,6 +36,7 @@ namespace damiao
 		lastTime_ = Clock::now();
 
 		this->cmd_pub_ = nh_.advertise<geometry_msgs::Twist>("/teleop/cmd_vel", 1);
+		this->motor_write_pub_ = nh_.advertise<dm_hw::MotorState>("/paddle/state", 1);
 
 		loopThread_ = std::thread([&]()
 								  {
@@ -76,7 +78,7 @@ namespace damiao
 
 		controllerManager_->update(ros::Time::now(), elapsedTime_);
 
-		hardwareInterface_->write(ros::Time::now(), elapsedTime_);
+		hardwareInterface_->write(ros::Time::now(), elapsedTime_, this->motor_write_pub_);
 
 		const auto sleepTill = currentTime + std::chrono::duration_cast<Clock::duration>(desiredDuration);
 		std::this_thread::sleep_until(sleepTill);

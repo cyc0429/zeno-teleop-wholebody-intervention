@@ -45,7 +45,7 @@ namespace damiao
 				std::string type = act_datas[it->first]["type"];
 				int can_id = static_cast<int>(act_datas[it->first]["can_id"]);
 				int mst_id = static_cast<int>(act_datas[it->first]["mst_id"]);
-				ROS_ERROR_STREAM("DmActuator " << it->first << " port: " << port << " type: " << type << " can_id: " << can_id << " mst_id: " << mst_id);
+				ROS_WARN_STREAM("DmActuator " << it->first << " port: " << port << " type: " << type << " can_id: " << can_id << " mst_id: " << mst_id);
 				DM_Motor_Type motorType;
 
 				if (type == "DM4310")
@@ -165,11 +165,11 @@ namespace damiao
 		}
 	}
 
-	void DmHW::write(const ros::Time &time, const ros::Duration &period)
+	void DmHW::write(const ros::Time &time, const ros::Duration &period, ros::Publisher pub)
 	{
 		for (auto motor_port : motor_ports_)
 		{
-			motor_port->write();
+			motor_port->write(pub);
 		}
 	}
 

@@ -15,14 +15,6 @@
   
   <!-- Arguments for paddle2ranger -->
   <arg name="enable_paddle2ranger" default="true" />
-  <arg name="input_angular_min" default="-0.5" />
-  <arg name="input_angular_max" default="0.5" />
-  <arg name="input_linear_min" default="-0.2" />
-  <arg name="input_linear_max" default="0.2" />
-  <arg name="angular_deadzone" default="0.02" />
-  <arg name="linear_deadzone" default="0.02" />
-  <arg name="max_vel" default="0.25" />
-  <arg name="max_angular_vel" default="0.5" />
   
   <!-- Arguments for dual-arm control -->
   <arg name="enable_dual_arm" default="true" />
@@ -57,29 +49,12 @@
   
   <!-- Launch paddle2ranger node -->
   <group if="$(arg enable_paddle2ranger)">
+    <rosparam file="$(find teleop_bridge)/config/paddle.yaml" command="load" ns="ranger_teleop_to_robot_paddle_node" />
     <node name="ranger_teleop_to_robot_paddle_node" pkg="teleop_bridge" type="ranger_teleop_to_robot_paddle.py" output="screen">
-      <param name="input_angular_min" value="$(arg input_angular_min)" />
-      <param name="input_angular_max" value="$(arg input_angular_max)" />
-      <param name="input_linear_min" value="$(arg input_linear_min)" />
-      <param name="input_linear_max" value="$(arg input_linear_max)" />
-      <param name="angular_deadzone" value="$(arg angular_deadzone)" />
-      <param name="linear_deadzone" value="$(arg linear_deadzone)" />
-      <param name="max_vel" value="$(arg max_vel)" />
-      <param name="max_angular_vel" value="$(arg max_angular_vel)" />
     </node>
   </group>
   
   <!-- Launch dual-arm control node -->
-  <!-- <group if="$(arg enable_dual_arm)">
-    <node name="piper_dual_ctrl_node" pkg="piper_bridge" type="piper_dual_ctrl_node.py" output="screen">
-      <param name="left_can_port" value="$(arg left_can_port)" />
-      <param name="right_can_port" value="$(arg right_can_port)" />
-      <param name="auto_enable" value="$(arg auto_enable)" />
-      <param name="gripper_val_mutiple" value="$(arg gripper_val_mutiple)" />
-      <param name="girpper_exist" value="$(arg girpper_exist)" />
-    </node>
-  </group> -->
-
   <group if="$(arg enable_dual_arm)">
     <include file="$(find piper_ctrl)/launch/piper_dual_robot.launch">
       <arg name="left_can_port" value="$(arg left_can_port)" />

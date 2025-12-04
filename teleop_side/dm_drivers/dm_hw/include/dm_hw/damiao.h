@@ -269,7 +269,7 @@ namespace damiao
          * @param motor 电机对象
          */
         void enable();
-        void write();
+        void write(ros::Publisher pub);
         void read(ros::Publisher pub);
         /*
          * @brief refresh motor status 刷新电机状态

@@ -87,6 +87,7 @@ namespace damiao
 		std::atomic_bool loopRunning_{};
 		ros::Duration elapsedTime_;
 		ros::Publisher cmd_pub_;
+		ros::Publisher motor_write_pub_;
 
 		Clock::time_point lastTime_;
 

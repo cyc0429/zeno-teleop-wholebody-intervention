@@ -1,6 +1,7 @@
 #include "dm_hw/damiao.h"
 #include <signal.h>
 #include <geometry_msgs/Twist.h>
+#include <dm_hw/MotorState.h>
 namespace damiao
 {
 
@@ -454,8 +455,12 @@ namespace damiao
         serial_.write((uint8_t *)&send_data, sizeof(can_send_frame));
     }
 
-    void Motor_Control::write()
+    void Motor_Control::write(ros::Publisher pub)
     {
+        dm_hw::MotorState motor_state_msg;
+        motor_state_msg.header.stamp = ros::Time::now();
+        motor_state_msg.header.frame_id = "motor_control";
+        
         for (const auto &m : *data_ptr_)
         {
             int motor_id = m.first; // 这里指的是can_id
@@ -465,14 +470,24 @@ namespace damiao
             }
             auto &it = motors[motor_id];
 
-            std::cerr << "====================" << std::endl;
-            // std::cerr << "write" << std::endl;
-            std::cerr << "motor_id: " << motor_id << std::endl;
-            std::cerr << "cmd pos: " << m.second.cmd_pos << " cmd vel: " << m.second.cmd_vel << " cmd effort: " << m.second.cmd_effort << std::endl;
-            std::cerr << "pos: " << m.second.pos << " vel: " << m.second.vel << " effort: " << m.second.effort << std::endl;
-            std::cerr << "kp: " << m.second.kp << " kd: " << m.second.kd << std::endl;
-            // std::cerr << "finishe write" << std::endl;
+            // Collect all motor data into lists
+            motor_state_msg.names.push_back(m.second.name);
+            motor_state_msg.position.push_back(m.second.pos);
+            motor_state_msg.velocity.push_back(m.second.vel);
+            motor_state_msg.effort.push_back(m.second.effort);
+            motor_state_msg.cmd_position.push_back(m.second.cmd_pos);
+            motor_state_msg.cmd_velocity.push_back(m.second.cmd_vel);
+            motor_state_msg.cmd_effort.push_back(m.second.cmd_effort);
+            motor_state_msg.kp.push_back(m.second.kp);
+            motor_state_msg.kd.push_back(m.second.kd);
+            
             control_mit(*it, m.second.kp, m.second.kd, m.second.cmd_pos, m.second.cmd_vel, m.second.cmd_effort); // control_mit(Motor &DM_Motor, float kp, float kd, float q, float dq, float tau)
+        }
+        
+        // Publish the motor state message
+        if (pub.getNumSubscribers() > 0)
+        {
+            pub.publish(motor_state_msg);
         }
     }
 

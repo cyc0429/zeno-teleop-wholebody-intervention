@@ -44,7 +44,7 @@ namespace damiao
 		 */
 		bool init(ros::NodeHandle &root_nh, ros::NodeHandle &robot_hw_nh) override;
 		void read(const ros::Time &time, const ros::Duration &period, ros::Publisher pub);
-		void write(const ros::Time &time, const ros::Duration &period) override;
+		void write(const ros::Time &time, const ros::Duration &period, ros::Publisher pub);
 
 	protected:
 		// 一个serial一个元素
