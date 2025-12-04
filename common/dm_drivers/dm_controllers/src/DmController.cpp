@@ -135,12 +135,12 @@ namespace damiao
 			{
 				if (repulsive_x < -x_params_.repulsive_force_threshold)
 				{
-					pos_des_x = x_params_.pos_haptic_negative;
+					pos_des_x = x_params_.pos_haptic_positive;
 					kd_x = x_params_.kd_haptic;
 				}
 				else if (repulsive_x > x_params_.repulsive_force_threshold)
 				{
-					pos_des_x = x_params_.pos_haptic_positive;
+					pos_des_x = x_params_.pos_haptic_negative;
 					kd_x = x_params_.kd_haptic;
 				}
 			}
