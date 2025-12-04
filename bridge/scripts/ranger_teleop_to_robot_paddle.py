@@ -56,18 +56,14 @@ class RangerTeleopToRobot:
         # Subtract deadzone and map from [deadzone, max_val] to [0, max_val] for positive values
         # or from [-max_val, -deadzone] to [-max_val, 0] for negative values
         if value > 0:
-            # Subtract deadzone: value becomes [0, max_val - deadzone]
             value_after_deadzone = value - deadzone
-            # Map from [0, max_val - deadzone] to [0, max_val]
             if max_val - deadzone > 0:
                 normalized = value_after_deadzone / (max_val - deadzone)
             else:
                 normalized = 1.0
             velocity = normalized * max_vel
         else:
-            # Add deadzone (subtract negative): value becomes [-(abs(min_val) - deadzone), 0]
             value_after_deadzone = value + deadzone
-            # Map from [-(abs(min_val) - deadzone), 0] to [-max_val, 0]
             if abs(min_val) - deadzone > 0:
                 normalized = value_after_deadzone / (abs(min_val) - deadzone)
             else:
