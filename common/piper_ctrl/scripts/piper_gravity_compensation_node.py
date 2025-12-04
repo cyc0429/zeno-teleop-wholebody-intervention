@@ -12,6 +12,8 @@ import numpy as np
 import pinocchio as pin
 import os
 import subprocess
+import re
+import tempfile
 from sensor_msgs.msg import JointState
 
 
@@ -30,23 +32,67 @@ class GravityCompensationArm:
 
         self.arm_side = arm_side
 
-        # Get URDF file path
+        # Get URDF file path and resolve package:// paths
         try:
             package_path = subprocess.check_output("rospack find piper_description", shell=True).strip().decode("utf-8")
             urdf_path = os.path.join(package_path, "urdf", "piper_description.urdf")
             urdf_path = os.path.abspath(urdf_path)
             rospy.loginfo("[%s] URDF path: %s", self.arm_side, urdf_path)
+
+            # Read URDF file content
+            with open(urdf_path, "r") as f:
+                urdf_content = f.read()
+
+            # Replace package:// paths with absolute paths
+            def resolve_package_path(match):
+                package_name = match.group(1)
+                relative_path = match.group(2)
+                try:
+                    pkg_path = (
+                        subprocess.check_output(["rospack", "find", package_name], stderr=subprocess.DEVNULL)
+                        .strip()
+                        .decode("utf-8")
+                    )
+                    absolute_path = os.path.join(pkg_path, relative_path)
+                    return absolute_path
+                except Exception as e:
+                    rospy.logwarn(
+                        "[%s] Failed to resolve package://%s/%s: %s", self.arm_side, package_name, relative_path, str(e)
+                    )
+                    return match.group(0)  # Return original if resolution fails
+
+            # Replace all package:// paths in URDF content
+            urdf_content = re.sub(r"package://([^/]+)/(.+)", resolve_package_path, urdf_content)
+
+            # Write processed URDF to temporary file
+            temp_urdf_file = tempfile.NamedTemporaryFile(mode="w", suffix=".urdf", delete=False)
+            temp_urdf_file.write(urdf_content)
+            temp_urdf_file.close()
+            processed_urdf_path = temp_urdf_file.name
+            rospy.loginfo("[%s] Processed URDF saved to: %s", self.arm_side, processed_urdf_path)
+
         except Exception as e:
-            rospy.logerr("[%s] Failed to find URDF file: %s", self.arm_side, str(e))
+            rospy.logerr("[%s] Failed to process URDF file: %s", self.arm_side, str(e))
             raise
 
         # Load robot model
         try:
-            self.robot = pin.RobotWrapper.BuildFromURDF(urdf_path)
+            self.robot = pin.RobotWrapper.BuildFromURDF(processed_urdf_path)
             rospy.loginfo("[%s] Robot model loaded successfully", self.arm_side)
             rospy.loginfo("[%s] Number of joints: %d", self.arm_side, self.robot.model.nq)
+
+            # Clean up temporary file
+            try:
+                os.unlink(processed_urdf_path)
+            except Exception:
+                pass
         except Exception as e:
             rospy.logerr("[%s] Failed to load robot model: %s", self.arm_side, str(e))
+            # Clean up temporary file on error
+            try:
+                os.unlink(processed_urdf_path)
+            except Exception:
+                pass
             raise
 
         # Use full model (including gripper) for calculation
