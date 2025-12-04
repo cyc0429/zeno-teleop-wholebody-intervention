@@ -9,6 +9,9 @@
 #include <geometry_msgs/Vector3Stamped.h>
 #include <dm_common/HybridJointInterface.h>
 #include <mutex>
+#include <map>
+#include <string>
+#include <vector>
 
 namespace damiao
 {
@@ -35,17 +38,30 @@ private:
   double repulsive_force_x_;
   double repulsive_force_y_;
   
+  // Structure to hold axis-specific parameters
+  struct AxisParams {
+    std::string motor_name;
+    double kp_default;
+    double kd_default;
+    double repulsive_force_threshold;
+    double pos_haptic_positive;
+    double pos_haptic_negative;
+    double kd_haptic;
+    bool has_haptic;  // Whether haptic parameters are available
+  };
+  
   // Control parameters (loaded from ROS parameters)
-  double base_kp_;                    // Base kp value for motor1 and motor2
-  double repulsive_force_threshold_;   // Threshold for repulsive force
-  double pos_des_positive_;           // Positive position command when threshold exceeded
-  double pos_des_negative_;            // Negative position command when threshold exceeded
-  double kd_default_;                 // Default kd value
-  double kd_high_;                    // High kd value when threshold exceeded
-  double kp_motor0_;                  // kp value for motor0
-  double kd_motor0_;                  // kd value for motor0
+  AxisParams x_params_;  // Parameters for x axis (joint1_motor)
+  AxisParams y_params_;  // Parameters for y axis (joint2_motor)
+  AxisParams z_params_;  // Parameters for z axis (joint0_motor)
+  
+  // Mapping from motor name to index in hybridJointHandles_
+  std::map<std::string, size_t> motor_index_map_;
   
   void repulsiveForceCallback(const geometry_msgs::Vector3Stamped::ConstPtr& msg);
+  
+  // Helper function to load axis parameters
+  void loadAxisParams(ros::NodeHandle& nh, const std::string& axis_name, AxisParams& params);
 
 };
 
