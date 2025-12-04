@@ -74,11 +74,11 @@ After setup, launch all teleoperation nodes in a single command:
 
 ```bash
 source devel/setup.bash
-roslaunch teleop_bridge start_teleop_all.launch left_can_port:=can_left right_can_port:=can_right auto_enable:=true enable_paddle:=true enable_dual_arm:=true
+roslaunch teleop_setup start_teleop_all.launch left_can_port:=can_left right_can_port:=can_right auto_enable:=true enable_paddle:=true enable_dual_arm:=true
 
 or
 
-roslaunch teleop_bridge start_teleop_all.launch left_can_port:=can_left right_can_port:=can_right auto_enable:=true enable_paddle:=false enable_dual_arm:=true
+roslaunch teleop_setup start_teleop_all.launch left_can_port:=can_left right_can_port:=can_right auto_enable:=true enable_paddle:=false enable_dual_arm:=true
 ```
 
 **Parameters:**
@@ -123,12 +123,12 @@ After setup, launch all robot nodes in a single command:
 
 ```bash
 source devel/setup.bash
-roslaunch piper_bridge start_robot_all.launch ranger_can_port:=can0 left_can_port:=can_left right_can_port:=can_right enable_ranger:=true enable_paddle2ranger:=true enable_dual_arm:=true enable_cameras:=true enable_rviz:=true camera_left_usb_port:=2-1 camera_right_usb_port:=2-8 camera_top_usb_port:=2-2
-roslaunch piper_bridge start_robot_all.launch ranger_can_port:=can0 left_can_port:=can_left right_can_port:=can_right enable_ranger:=false enable_paddle2ranger:=false enable_dual_arm:=true enable_cameras:=true enable_rviz:=true camera_left_usb_port:=2-1 camera_right_usb_port:=2-8 camera_top_usb_port:=2-2
+roslaunch robot_setup start_robot_all.launch ranger_can_port:=can0 left_can_port:=can_left right_can_port:=can_right enable_ranger:=true enable_paddle2ranger:=true enable_dual_arm:=true enable_cameras:=true enable_rviz:=true camera_left_usb_port:=2-1 camera_right_usb_port:=2-8 camera_top_usb_port:=2-2
+roslaunch robot_setup start_robot_all.launch ranger_can_port:=can0 left_can_port:=can_left right_can_port:=can_right enable_ranger:=false enable_paddle2ranger:=false enable_dual_arm:=true enable_cameras:=true enable_rviz:=true camera_left_usb_port:=2-1 camera_right_usb_port:=2-8 camera_top_usb_port:=2-2
 ```
 
 ```bash
-python src/zeno-wholebody-teleop/robot_side/piper_bridge/scripts/piper_gravity_compensation_node.py
+rosrun piper_ctrl piper_gravity_compensation_node.py
 ```
 
 **Parameters:**
@@ -184,10 +184,10 @@ test
 
 ```bash
 remote-1 roslaunch rplidar_ros rplidar_c1.launch
-remote-2 rosrun teleop_bridge paddle_haptic_client.py _weight_max:=50.0 _r_far:=0.5 _r_min:=0.25
-remote-3 roslaunch piper_bridge start_robot_all.launch ranger_can_port:=can0 enable_ranger:=true enable_paddle2ranger:=true enable_dual_arm:=false enable_cameras:=false enable_rviz:=false
+remote-2 rosrun teleop_setup paddle_haptic_client.py _weight_max:=50.0 _r_far:=0.5 _r_min:=0.25
+remote-3 roslaunch robot_setup start_robot_all.launch ranger_can_port:=can0 enable_ranger:=true enable_paddle2ranger:=true enable_dual_arm:=false enable_cameras:=false enable_rviz:=false
 
 local-1 rosrun rviz rviz
-local-2 roslaunch teleop_bridge start_teleop_all.launch left_can_port:=can_left right_can_port:=can_right auto_enable:=true enable_paddle:=true enable_dual_arm:=false
+local-2 roslaunch teleop_setup start_teleop_all.launch left_can_port:=can_left right_can_port:=can_right auto_enable:=true enable_paddle:=true enable_dual_arm:=false
 local-3 rostopic echo /repulsive_force_vector
 ```
