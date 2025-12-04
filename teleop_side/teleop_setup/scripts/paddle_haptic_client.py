@@ -11,27 +11,28 @@ from geometry_msgs.msg import Point
 
 
 def weight(r: float, r_min: float = 0.3, r_far: float = 1.2, weight_max: float = 1.0, delta: float = 0.05) -> float:
-    """Calculate weight based on distance. weight_max controls the maximum value."""
-    if r < r_min or r > r_far:
+    """Calculate weight based on distance. weight_max controls the maximum value.
+    
+    - [r_min, r_far]: Quadratic function, monotonically decreasing from weight_max to 0
+    - [r_min-delta, r_min): Smoothstep function, monotonically increasing from 0 to weight_max
+      with zero derivatives at both endpoints
+    - Outside these intervals: returns 0
+    """
+    if r < r_min - delta or r > r_far:
         return 0.0
 
-    # Derive k from weight_max: weight_max occurs at r = r_min + delta
-    # weight_max = k * (1.0 / (r_min + delta) - 1.0 / r_far)
-    # k = weight_max / (1.0 / (r_min + delta) - 1.0 / r_far)
-    denominator = 1.0 / (r_min + delta) - 1.0 / r_far
-    if abs(denominator) < 1e-9:
-        k = 0.0
+    if r < r_min:
+        # Interval [r_min - delta, r_min): sigmoid-like smooth transition
+        # t goes from 0 to 1 as r goes from (r_min - delta) to r_min
+        t = (r - (r_min - delta)) / delta
+        # Smoothstep: 3t^2 - 2t^3, has zero derivative at t=0 and t=1
+        return weight_max * (3.0 * t * t - 2.0 * t * t * t)
     else:
-        k = weight_max / denominator
-
-    base = k * (1.0 / r - 1.0 / r_far)
-
-    if r <= r_min + delta:
-        xi = (r - r_min) / delta
-        s = 3 * xi * xi - 2 * xi * xi * xi
-        return base * s
-    else:
-        return base
+        # Interval [r_min, r_far]: quadratic function
+        # Normalized distance from r_min to r_far (0 to 1)
+        normalized = (r - r_min) / (r_far - r_min)
+        # Quadratic decrease: (1 - normalized)^2 * weight_max
+        return weight_max * (1.0 - normalized) * (1.0 - normalized)
 
 
 def rad2deg(rad):
@@ -144,7 +145,7 @@ def create_axis_marker(frame_id: str, axis: str, length: float = 0.3) -> Marker:
         marker.color.r = 0.0
         marker.color.g = 1.0
         marker.color.b = 0.0
-        angle = -math.pi / 2.0
+        angle = math.pi / 2.0
         marker.pose.orientation.z = math.sin(angle / 2.0)
         marker.pose.orientation.w = math.cos(angle / 2.0)
         marker.pose.orientation.x = 0.0
@@ -154,7 +155,7 @@ def create_axis_marker(frame_id: str, axis: str, length: float = 0.3) -> Marker:
         marker.color.r = 0.0
         marker.color.g = 0.0
         marker.color.b = 1.0
-        angle = math.pi / 2.0
+        angle = -math.pi / 2.0
         marker.pose.orientation.y = math.sin(angle / 2.0)
         marker.pose.orientation.w = math.cos(angle / 2.0)
         marker.pose.orientation.x = 0.0
