@@ -29,6 +29,9 @@
     <arg name="camera_top_usb_port" default="2-2" />
     <arg name="enable_rviz" default="true" />
 
+    <!-- Arguments for lidar -->
+    <arg name="enable_lidar" default="true" />
+
     <!-- Setup robot_description for joint_state_publisher_gui if needed -->
     <param name="robot_description" textfile="$(find piper_description)/urdf/piper_description.xacro" />
 
@@ -120,6 +123,13 @@
             <arg name="accel_fps" value="250" />
             <arg name="publish_tf" value="true" />
             <arg name="tf_prefix" value="realsense_top" />
+        </include>
+    </group>
+
+    <!-- Launch lidar -->
+    <group if="$(arg enable_lidar)">
+        <include file="$(find rplidar_ros)/launch/rplidar_c1.launch">
+            <arg name="serial_port" value="/dev/ttyUSB0" />
         </include>
     </group>
 

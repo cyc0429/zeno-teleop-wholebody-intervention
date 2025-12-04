@@ -21,14 +21,14 @@
 #   kd_haptic: 2
 
 # ========================================
-# hand resilience force feedback --> weight_max = 100.0
+# hand resilience force feedback --> weight_max = 70.0
 # ========================================
 
 x:
   motor_name: "joint2_motor"
   kp_default: 3
   kd_default: 1
-  repulsive_force_threshold: 0.01
+  repulsive_force_threshold: 100
   pos_haptic_positive: 0
   pos_haptic_negative: 0
   kd_haptic: 2
@@ -37,7 +37,7 @@ y:
   motor_name: "joint1_motor"
   kp_default: 3
   kd_default: 1
-  repulsive_force_threshold: 0.01
+  repulsive_force_threshold: 100
   pos_haptic_positive: 0
   pos_haptic_negative: 0
   kd_haptic: 2

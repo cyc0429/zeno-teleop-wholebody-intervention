@@ -6,6 +6,7 @@
 
 	<!-- Arguments for paddle (damiao) -->
 	<arg name="enable_paddle" default="true" />
+	<arg name="enable_paddle_haptic" default="true" />
 
 	<!-- Arguments for dual-arm -->
 	<arg name="enable_dual_arm" default="true" />
@@ -18,7 +19,18 @@
 
 	<!-- Launch paddle (damiao) node -->
 	<group if="$(arg enable_paddle)">
-		<include file="$(find dm_controllers)/launch/load_dm_hw.launch" />
+		<!-- Use external paddle_haptic.yaml when haptic is enabled -->
+		<include file="$(find dm_controllers)/launch/load_dm_hw.launch" if="$(arg enable_paddle_haptic)">
+			<arg name="haptic_config" value="$(find teleop_setup)/config/paddle_haptic.yaml" />
+		</include>
+		<!-- Use default haptic.yaml when haptic is disabled -->
+		<include file="$(find dm_controllers)/launch/load_dm_hw.launch" unless="$(arg enable_paddle_haptic)" />
+
+		<group if="$(arg enable_paddle_haptic)">
+			<node name="paddle_haptic_client" pkg="teleop_setup" type="paddle_haptic_client.py" output="screen">
+				<rosparam file="$(find teleop_setup)/config/paddle_haptic.yaml" command="load" />
+			</node>
+		</group>
 	</group>
 
 	<!-- Launch dual-arm teleop node -->
