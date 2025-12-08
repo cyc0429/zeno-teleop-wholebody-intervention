@@ -2,7 +2,7 @@
 
 ## 0. Prerequisite
 
-- clone <piper_ros>, <piper_sdk> (need install), <ranger_ros>, <ugv_sdk> and install all dependencies
+- clone <piper_ros>, <piper_sdk> (need install), <ranger_ros>, [ugv_sdk](https://github.com/agilexrobotics/ugv_sdk.git) and install all dependencies
 - setup master and slave
     - check ip addresses ```${master}``` and ```${slave}```
     - master PC:

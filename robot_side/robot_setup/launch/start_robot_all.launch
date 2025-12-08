@@ -29,9 +29,6 @@
     <arg name="camera_top_usb_port" default="2-2" />
     <arg name="enable_rviz" default="true" />
 
-    <!-- Arguments for lidar -->
-    <arg name="enable_lidar" default="true" />
-
     <!-- Setup robot_description for joint_state_publisher_gui if needed -->
     <param name="robot_description" textfile="$(find piper_description)/urdf/piper_description.xacro" />
 
@@ -51,8 +48,7 @@
     <!-- Launch paddle2ranger node -->
     <group if="$(arg enable_paddle2ranger)">
         <rosparam file="$(find bridge)/config/paddle.yaml" command="load" ns="ranger_teleop_to_robot_paddle_node" />
-        <node name="ranger_teleop_to_robot_paddle_node" pkg="bridge" type="ranger_teleop_to_robot_paddle.py"
-            output="screen">
+        <node name="ranger_teleop_to_robot_paddle_node" pkg="bridge" type="ranger_teleop_to_robot_paddle.py" output="screen">
         </node>
     </group>
 
@@ -73,63 +69,194 @@
         <include file="$(find realsense2_camera)/launch/rs_camera.launch">
             <arg name="camera" value="realsense_left" />
             <arg name="usb_port_id" value="$(arg camera_left_usb_port)" />
-            <arg name="enable_color" value="true" />
-            <arg name="enable_depth" value="true" />
-            <arg name="enable_sync" value="true" />
-            <arg name="align_depth" value="true" />
-            <arg name="color_width" value="1280" />
-            <arg name="color_height" value="720" />
-            <arg name="color_fps" value="30" />
-            <arg name="depth_width" value="1280" />
-            <arg name="depth_height" value="720" />
-            <arg name="depth_fps" value="30" />
-            <arg name="publish_tf" value="true" />
-            <arg name="tf_prefix" value="realsense_left" />
+
+            <!-- 深度：近距离精度优先，使用 848x480@30 -->
+            <arg name="enable_depth" default="true"/>
+            <arg name="depth_width" default="848"/>
+            <arg name="depth_height" default="480"/>
+            <arg name="depth_fps" default="30"/>
+
+            <!-- 彩色：D405 的 RGB 实际也是左目图像，分辨率和深度对齐，方便后处理 -->
+            <arg name="enable_color" default="true"/>
+            <arg name="color_width" default="848"/>
+            <arg name="color_height" default="480"/>
+            <arg name="color_fps" default="30"/>
+
+            <!-- 红外：开启红外左右图，方便标定和调曝光；分辨率同样设成 848x480@30 -->
+            <arg name="enable_infra" default="false"/>
+            <!-- 常用 infra1/infra2 -->
+            <arg name="enable_infra1" default="true"/>
+            <arg name="enable_infra2" default="true"/>
+            <arg name="infra_width" default="848"/>
+            <arg name="infra_height" default="480"/>
+            <arg name="infra_fps" default="30"/>
+            <arg name="infra_rgb" default="false"/>
+
+            <!-- 关闭 confidence 图（D405 主要用不到） -->
+            <arg name="enable_confidence" default="false"/>
+            <arg name="confidence_width" default="-1"/>
+            <arg name="confidence_height" default="-1"/>
+            <arg name="confidence_fps" default="-1"/>
+
+            <!-- 点云与深度对齐：腕部相机一般要 RGB-D 配合，建议全部打开 -->
+            <arg name="enable_pointcloud" default="true"/>
+            <arg name="pointcloud_texture_stream" default="RS2_STREAM_COLOR"/>
+            <arg name="pointcloud_texture_index" default="0"/>
+            <arg name="allow_no_texture_points" default="false"/>
+            <arg name="ordered_pc" default="false"/>
+
+            <!-- 对齐深度到彩色 + 时间同步，方便后面做检测框投影、ICP 等 -->
+            <arg name="align_depth" default="true"/>
+            <arg name="enable_sync" default="true"/>
+
+            <!-- 深度后处理滤波链：降噪 + 填洞，适合近距离表面任务 -->
+            <!-- decimation, spatial, temporal, hole_filling 是官方常用组合 -->
+            <arg name="filters" default="decimation,spatial,temporal,hole_filling"/>
+
+            <!-- 只关心 60cm 内（D405 理想范围 7–50cm），顺便裁掉远处噪声 -->
+            <!-- 单位是米；如果场景更近，可以改成 0.4 -->
+            <arg name="clip_distance" default="0.6"/>
+
+            <!-- IMU 相关：D405 没有 IMU，全部保持关闭 -->
+            <arg name="enable_gyro" default="false"/>
+            <arg name="enable_accel" default="false"/>
+            <arg name="gyro_fps" default="-1"/>
+            <arg name="accel_fps" default="-1"/>
+
+            <!-- 曝光 / 增益：先交给自动曝光，后期用 rqt_reconfigure 再精调 -->
+            <arg name="stereo_module/exposure/1" default="0"/>
+            <arg name="stereo_module/gain/1" default="0"/>
+            <arg name="stereo_module/exposure/2" default="0"/>
+            <arg name="stereo_module/gain/2" default="0"/>
+
+            <!-- TF 与其他保持默认就行 -->
+            <arg name="publish_tf" default="true"/>
+            <arg name="tf_publish_rate" default="0"/>
         </include>
 
         <include file="$(find realsense2_camera)/launch/rs_camera.launch">
             <arg name="camera" value="realsense_right" />
             <arg name="usb_port_id" value="$(arg camera_right_usb_port)" />
-            <arg name="enable_color" value="true" />
-            <arg name="enable_depth" value="true" />
-            <arg name="enable_sync" value="true" />
-            <arg name="align_depth" value="true" />
-            <arg name="color_width" value="1280" />
-            <arg name="color_height" value="720" />
-            <arg name="color_fps" value="30" />
-            <arg name="depth_width" value="1280" />
-            <arg name="depth_height" value="720" />
-            <arg name="depth_fps" value="30" />
-            <arg name="publish_tf" value="true" />
             <arg name="tf_prefix" value="realsense_right" />
+
+            <!-- 深度：近距离精度优先，使用 848x480@30 -->
+            <arg name="enable_depth" default="true"/>
+            <arg name="depth_width" default="848"/>
+            <arg name="depth_height" default="480"/>
+            <arg name="depth_fps" default="30"/>
+
+            <!-- 彩色：D405 的 RGB 实际也是左目图像，分辨率和深度对齐，方便后处理 -->
+            <arg name="enable_color" default="true"/>
+            <arg name="color_width" default="848"/>
+            <arg name="color_height" default="480"/>
+            <arg name="color_fps" default="30"/>
+
+            <!-- 红外：开启红外左右图，方便标定和调曝光；分辨率同样设成 848x480@30 -->
+            <arg name="enable_infra" default="false"/>
+            <!-- 常用 infra1/infra2 -->
+            <arg name="enable_infra1" default="true"/>
+            <arg name="enable_infra2" default="true"/>
+            <arg name="infra_width" default="848"/>
+            <arg name="infra_height" default="480"/>
+            <arg name="infra_fps" default="30"/>
+            <arg name="infra_rgb" default="false"/>
+
+            <!-- 关闭 confidence 图（D405 主要用不到） -->
+            <arg name="enable_confidence" default="false"/>
+            <arg name="confidence_width" default="-1"/>
+            <arg name="confidence_height" default="-1"/>
+            <arg name="confidence_fps" default="-1"/>
+
+            <!-- 点云与深度对齐：腕部相机一般要 RGB-D 配合，建议全部打开 -->
+            <arg name="enable_pointcloud" default="true"/>
+            <arg name="pointcloud_texture_stream" default="RS2_STREAM_COLOR"/>
+            <arg name="pointcloud_texture_index" default="0"/>
+            <arg name="allow_no_texture_points" default="false"/>
+            <arg name="ordered_pc" default="false"/>
+
+            <!-- 对齐深度到彩色 + 时间同步，方便后面做检测框投影、ICP 等 -->
+            <arg name="align_depth" default="true"/>
+            <arg name="enable_sync" default="true"/>
+
+            <!-- 深度后处理滤波链：降噪 + 填洞，适合近距离表面任务 -->
+            <!-- decimation, spatial, temporal, hole_filling 是官方常用组合 -->
+            <arg name="filters" default="decimation,spatial,temporal,hole_filling"/>
+
+            <!-- 只关心 60cm 内（D405 理想范围 7–50cm），顺便裁掉远处噪声 -->
+            <!-- 单位是米；如果场景更近，可以改成 0.4 -->
+            <arg name="clip_distance" default="0.6"/>
+
+            <!-- IMU 相关：D405 没有 IMU，全部保持关闭 -->
+            <arg name="enable_gyro" default="false"/>
+            <arg name="enable_accel" default="false"/>
+            <arg name="gyro_fps" default="-1"/>
+            <arg name="accel_fps" default="-1"/>
+
+            <!-- 曝光 / 增益：先交给自动曝光，后期用 rqt_reconfigure 再精调 -->
+            <arg name="stereo_module/exposure/1" default="0"/>
+            <arg name="stereo_module/gain/1" default="0"/>
+            <arg name="stereo_module/exposure/2" default="0"/>
+            <arg name="stereo_module/gain/2" default="0"/>
+
+            <!-- TF 与其他保持默认就行 -->
+            <arg name="publish_tf" default="true"/>
+            <arg name="tf_publish_rate" default="0"/>
         </include>
 
         <include file="$(find realsense2_camera)/launch/rs_camera.launch">
             <arg name="camera" value="realsense_top" />
             <arg name="usb_port_id" value="$(arg camera_top_usb_port)" />
-            <arg name="enable_color" value="true" />
-            <arg name="enable_depth" value="true" />
-            <arg name="enable_sync" value="true" />
-            <arg name="align_depth" value="true" />
-            <arg name="enable_gyro" value="true" />
-            <arg name="enable_accel" value="true" />
-            <arg name="color_width" value="1280" />
-            <arg name="color_height" value="720" />
-            <arg name="color_fps" value="30" />
-            <arg name="depth_width" value="1280" />
-            <arg name="depth_height" value="720" />
-            <arg name="depth_fps" value="30" />
-            <arg name="gyro_fps" value="400" />
-            <arg name="accel_fps" value="250" />
-            <arg name="publish_tf" value="true" />
-            <arg name="tf_prefix" value="realsense_top" />
-        </include>
-    </group>
 
-    <!-- Launch lidar -->
-    <group if="$(arg enable_lidar)">
-        <include file="$(find rplidar_ros)/launch/rplidar_c1.launch">
-            <arg name="serial_port" value="/dev/ttyUSB0" />
+            <!-- 开启深度，使用 D435 推荐深度分辨率 848x480@30 -->
+            <arg name="enable_depth" default="true"/>
+            <arg name="depth_width" default="848"/>
+            <arg name="depth_height" default="480"/>
+            <arg name="depth_fps" default="30"/>
+
+            <!-- 红外左右图，用来保证深度正常，也方便后面做标定/调试 -->
+            <arg name="enable_infra1" default="true"/>
+            <arg name="enable_infra2" default="true"/>
+            <arg name="enable_infra" default="false"/>
+            <!-- 有些版本用 infra1/2，不用总 infra -->
+            <arg name="infra_width" default="848"/>
+            <arg name="infra_height" default="480"/>
+            <arg name="infra_fps" default="30"/>
+
+            <!-- 彩色图，用 848x480@30，带宽压力小一点，方便做视觉检测 -->
+            <arg name="enable_color" default="true"/>
+            <arg name="color_width" default="848"/>
+            <arg name="color_height" default="480"/>
+            <arg name="color_fps" default="30"/>
+
+            <!-- 深度对齐到彩色，如果后面是用 color 坐标下的 depth（比如点云/检测框投影），建议打开 -->
+            <arg name="align_depth" default="true"/>
+
+            <!-- 点云（如果需要，建议先开，调通之后再关） -->
+            <!-- <arg name="enable_pointcloud" default="false"/>
+            <arg name="pointcloud_texture_stream" default="RS2_STREAM_COLOR"/>
+            <arg name="pointcloud_texture_index" default="0"/>
+            <arg name="allow_no_texture_points" default="false"/>
+            <arg name="ordered_pc" default="false"/> -->
+
+            <!-- 深度后处理滤波：孔洞填补、降噪等（按需可以慢慢加/减） -->
+            <!-- 可选组合：decimation,spatial,temporal,hole_filling -->
+            <!-- <arg name="filters" default="decimation,spatial,temporal,hole_filling"/> -->
+
+            <!-- 有效距离上限（单位：米），-2 为关闭裁剪；如果只关心 3m 内，可以设成 3.0 -->
+            <arg name="clip_distance" default="3.0"/>
+
+            <!-- 先暂时不要强制手动曝光，让相机自己自动调，方便排查问题 -->
+            <arg name="stereo_module/exposure/1" default="0"/>
+            <arg name="stereo_module/gain/1" default="0"/>
+            <arg name="stereo_module/exposure/2" default="0"/>
+            <arg name="stereo_module/gain/2" default="0"/>
+
+            <!-- 保持默认 -->
+            <arg name="enable_confidence" default="false"/>
+            <arg name="confidence_width" default="-1"/>
+            <arg name="confidence_height" default="-1"/>
+            <arg name="confidence_fps" default="-1"/>
+
         </include>
     </group>
 
