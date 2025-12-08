@@ -74,11 +74,7 @@ After setup, launch all teleoperation nodes in a single command:
 
 ```bash
 source devel/setup.bash
-roslaunch teleop_setup start_teleop_all.launch left_can_port:=can_left right_can_port:=can_right auto_enable:=true enable_paddle:=true enable_dual_arm:=true
-
-or
-
-roslaunch teleop_setup start_teleop_all.launch left_can_port:=can_left right_can_port:=can_right auto_enable:=true enable_paddle:=false enable_dual_arm:=true
+roslaunch teleop_setup start_teleop_all.launch left_can_port:=can_left right_can_port:=can_right auto_enable:=true enable_paddle:=true enable_dual_arm:=true enable_paddle_haptic:=true
 ```
 
 **Parameters:**
@@ -86,9 +82,16 @@ roslaunch teleop_setup start_teleop_all.launch left_can_port:=can_left right_can
 - `right_can_port`: CAN port name for right arm (default: `can_right`)
 - `auto_enable`: Auto enable motors (default: `true`)
 - `enable_paddle`: Enable paddle (damiao) node (default: `true`)
+- `enable_paddle_haptic`: Enable paddle haptic feedback from lidar (default: `true`). When enabled, uses `paddle_haptic.yaml` for motor haptic config; when disabled, uses default `haptic.yaml`.
 - `enable_dual_arm`: Enable dual-arm teleop node (default: `true`)
 - `gripper_val_mutiple`: Gripper value multiplier (default: `2`)
 - `girpper_exist`: Whether gripper exists (default: `true`)
+
+**Haptic Configuration:**
+
+The haptic parameters are configured in `teleop_setup/config/paddle_haptic.yaml`, which includes:
+- Motor haptic parameters (x, y, z axis): `kp_default`, `kd_default`, `repulsive_force_threshold`, etc.
+- Lidar-based haptic parameters: `scan_topic`, `r_min`, `r_far`, `weight_max`, `delta`, `filter_alpha`
 
 ## 3. Robot side
 
@@ -123,8 +126,7 @@ After setup, launch all robot nodes in a single command:
 
 ```bash
 source devel/setup.bash
-roslaunch robot_setup start_robot_all.launch ranger_can_port:=can0 left_can_port:=can_left right_can_port:=can_right enable_ranger:=true enable_paddle2ranger:=true enable_dual_arm:=true enable_cameras:=true enable_rviz:=true enable_gravity_compensation:=true camera_left_usb_port:=2-1 camera_right_usb_port:=2-8 camera_top_usb_port:=2-2
-roslaunch robot_setup start_robot_all.launch ranger_can_port:=can0 left_can_port:=can_left right_can_port:=can_right enable_ranger:=false enable_paddle2ranger:=false enable_dual_arm:=true enable_cameras:=true enable_rviz:=true enable_gravity_compensation:=false camera_left_usb_port:=2-1 camera_right_usb_port:=2-8 camera_top_usb_port:=2-2
+roslaunch robot_setup start_robot_all.launch ranger_can_port:=can0 left_can_port:=can_left right_can_port:=can_right enable_ranger:=true enable_paddle2ranger:=true enable_dual_arm:=true enable_cameras:=true enable_rviz:=true enable_gravity_compensation:=true enable_lidar:=true camera_left_usb_port:=2-1 camera_right_usb_port:=2-8 camera_top_usb_port:=2-2
 ```
 
 ```bash
@@ -177,17 +179,4 @@ rosrun piper_ctrl piper_gravity_compensation_node.py
 
 ```bash
 rosbag record -O demo_001.bag --bz2 -b 4096 /robot/arm_left/end_pose /robot/arm_right/end_pose /robot/arm_left/joint_states_single /robot/arm_right/joint_states_single /robot/arm_left/pos_cmd /robot/arm_right/pos_cmd /teleop/arm_left/end_pose /teleop/arm_right/end_pose /teleop/arm_left/joint_states_single /teleop/arm_right/joint_states_single  /realsense_left/color/image_raw/compressed /realsense_right/color/image_raw/compressed /realsense_top/color/image_raw/compressed /realsense_left/aligned_depth_to_color/image_raw/compressed /realsense_right/aligned_depth_to_color/image_raw/compressed /realsense_top/aligned_depth_to_color/image_raw/compressed /realsense_left/color/camera_info /realsense_right/color/camera_info /realsense_top/color/camera_info /realsense_left/aligned_depth_to_color/camera_info /realsense_right/aligned_depth_to_color/camera_info /realsense_top/aligned_depth_to_color/camera_info
-```
-
-
-test
-
-```bash
-remote-1 roslaunch rplidar_ros rplidar_c1.launch
-remote-2 rosrun teleop_setup paddle_haptic_client.py _weight_max:=50.0 _r_far:=0.5 _r_min:=0.25
-remote-3 roslaunch robot_setup start_robot_all.launch ranger_can_port:=can0 enable_ranger:=true enable_paddle2ranger:=true enable_dual_arm:=false enable_cameras:=false enable_rviz:=false
-
-local-1 rosrun rviz rviz
-local-2 roslaunch teleop_setup start_teleop_all.launch left_can_port:=can_left right_can_port:=can_right auto_enable:=true enable_paddle:=true enable_dual_arm:=false
-local-3 rostopic echo /repulsive_force_vector
 ```
