@@ -115,13 +115,7 @@
 
             <!-- 只关心 60cm 内（D405 理想范围 7–50cm），顺便裁掉远处噪声 -->
             <!-- 单位是米；如果场景更近，可以改成 0.4 -->
-            <arg name="clip_distance" default="0.6"/>
-
-            <!-- IMU 相关：D405 没有 IMU，全部保持关闭 -->
-            <arg name="enable_gyro" default="false"/>
-            <arg name="enable_accel" default="false"/>
-            <arg name="gyro_fps" default="-1"/>
-            <arg name="accel_fps" default="-1"/>
+            <arg name="clip_distance" default="0.4"/>
 
             <!-- 曝光 / 增益：先交给自动曝光，后期用 rqt_reconfigure 再精调 -->
             <arg name="stereo_module/exposure/1" default="0"/>
@@ -184,13 +178,7 @@
 
             <!-- 只关心 60cm 内（D405 理想范围 7–50cm），顺便裁掉远处噪声 -->
             <!-- 单位是米；如果场景更近，可以改成 0.4 -->
-            <arg name="clip_distance" default="0.6"/>
-
-            <!-- IMU 相关：D405 没有 IMU，全部保持关闭 -->
-            <arg name="enable_gyro" default="false"/>
-            <arg name="enable_accel" default="false"/>
-            <arg name="gyro_fps" default="-1"/>
-            <arg name="accel_fps" default="-1"/>
+            <arg name="clip_distance" default="0.4"/>
 
             <!-- 曝光 / 增益：先交给自动曝光，后期用 rqt_reconfigure 再精调 -->
             <arg name="stereo_module/exposure/1" default="0"/>
@@ -240,7 +228,7 @@
 
             <!-- 深度后处理滤波：孔洞填补、降噪等（按需可以慢慢加/减） -->
             <!-- 可选组合：decimation,spatial,temporal,hole_filling -->
-            <!-- <arg name="filters" default="decimation,spatial,temporal,hole_filling"/> -->
+            <arg name="filters" default="decimation,spatial,temporal,hole_filling"/>
 
             <!-- 有效距离上限（单位：米），-2 为关闭裁剪；如果只关心 3m 内，可以设成 3.0 -->
             <arg name="clip_distance" default="3.0"/>
