@@ -178,5 +178,27 @@ rosrun piper_ctrl piper_gravity_compensation_node.py
 ## 4. Record Data
 
 ```bash
-rosbag record -O demo_001.bag --bz2 -b 4096 /robot/arm_left/end_pose /robot/arm_right/end_pose /robot/arm_left/joint_states_single /robot/arm_right/joint_states_single /robot/arm_left/pos_cmd /robot/arm_right/pos_cmd /teleop/arm_left/end_pose /teleop/arm_right/end_pose /teleop/arm_left/joint_states_single /teleop/arm_right/joint_states_single  /realsense_left/color/image_raw/compressed /realsense_right/color/image_raw/compressed /realsense_top/color/image_raw/compressed /realsense_left/aligned_depth_to_color/image_raw/compressed /realsense_right/aligned_depth_to_color/image_raw/compressed /realsense_top/aligned_depth_to_color/image_raw/compressed /realsense_left/color/camera_info /realsense_right/color/camera_info /realsense_top/color/camera_info /realsense_left/aligned_depth_to_color/camera_info /realsense_right/aligned_depth_to_color/camera_info /realsense_top/aligned_depth_to_color/camera_info
+rosbag record -O demo_001.bag --bz2 -b 4096 \
+/robot/arm_left/end_pose \
+/robot/arm_right/end_pose \
+/robot/arm_left/joint_states_single \
+/robot/arm_right/joint_states_single \
+/robot/arm_left/pos_cmd \
+/robot/arm_right/pos_cmd \
+/teleop/arm_left/end_pose \
+/teleop/arm_right/end_pose \
+/teleop/arm_left/joint_states_single \
+/teleop/arm_right/joint_states_single \
+/realsense_left/color/image_raw/compressed \
+/realsense_right/color/image_raw/compressed \
+/realsense_top/color/image_raw/compressed \
+/realsense_left/aligned_depth_to_color/image_raw/compressed \
+/realsense_right/aligned_depth_to_color/image_raw/compressed \
+/realsense_top/aligned_depth_to_color/image_raw/compressed \
+/realsense_left/color/camera_info \
+/realsense_right/color/camera_info \
+/realsense_top/color/camera_info \
+/realsense_left/aligned_depth_to_color/camera_info \
+/realsense_right/aligned_depth_to_color/camera_info \
+/realsense_top/aligned_depth_to_color/camera_info
 ```
