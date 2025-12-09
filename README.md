@@ -189,16 +189,16 @@ rosbag record -O demo_001.bag --bz2 -b 4096 \
 /teleop/arm_right/end_pose \
 /teleop/arm_left/joint_states_single \
 /teleop/arm_right/joint_states_single \
-/realsense_left/color/image_raw/compressed \
-/realsense_right/color/image_raw/compressed \
-/realsense_top/color/image_raw/compressed \
-/realsense_left/aligned_depth_to_color/image_raw/compressed \
-/realsense_right/aligned_depth_to_color/image_raw/compressed \
-/realsense_top/aligned_depth_to_color/image_raw/compressed \
+/realsense_left/color/image_raw \
 /realsense_left/color/camera_info \
-/realsense_right/color/camera_info \
-/realsense_top/color/camera_info \
+/realsense_left/aligned_depth_to_color/image_raw \
 /realsense_left/aligned_depth_to_color/camera_info \
+/realsense_right/color/image_raw \
+/realsense_right/color/camera_info \
+/realsense_right/aligned_depth_to_color/image_raw \
 /realsense_right/aligned_depth_to_color/camera_info \
+/realsense_top/color/image_raw \
+/realsense_top/color/camera_info \
+/realsense_top/aligned_depth_to_color/image_raw \
 /realsense_top/aligned_depth_to_color/camera_info
 ```
