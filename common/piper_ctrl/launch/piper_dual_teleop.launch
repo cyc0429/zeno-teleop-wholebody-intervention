@@ -1,34 +1,25 @@
 <launch>
-  <arg name="left_can_port" default="can_left" />
-  <arg name="right_can_port" default="can_right" />
-  <arg name="robot_prefix_left" default="/robot/arm_left/" />
-  <arg name="robot_prefix_right" default="/robot/arm_right/" />
-  <arg name="teleop_prefix_left" default="/teleop/arm_left/" />
-  <arg name="teleop_prefix_right" default="/teleop/arm_right/" />
+  <!-- 
+    Piper Dual Teleop Launch
+    All parameters are loaded from config/piper_dual.yaml
+    Modify the yaml file to change topic mappings (no need to modify this launch file)
+  -->
+
+  <!-- Load node-specific parameters from piper_dual.yaml -->
+  <!-- Parameters under node name keys are automatically loaded to each node's private namespace -->
+  <rosparam file="$(find piper_ctrl)/config/piper_dual.yaml" command="load"/>
 
   <!-- Left arm node -->
   <node name="piper_teleop_left_node" pkg="piper_ctrl" type="piper_ctrl_node.py" output="screen">
+    <!-- Load common control config -->
     <rosparam file="$(find piper_ctrl)/config/piper_ctrl_mit_gravity.yaml" command="load"/>
-    <param name="can_port" value="$(arg left_can_port)"/>
-    <param name="topic_prefix" value="$(arg teleop_prefix_left)"/>
-    <param name="enable_gripper_haptic" value="true"/>
-    <remap from="$(arg teleop_prefix_left)joint_pos_cmd" to="$(arg teleop_prefix_left)joint_states_single"/>
-    <remap from="$(arg teleop_prefix_left)joint_tor_cmd" to="$(arg robot_prefix_left)joint_states_single"/>
-    <remap from="$(arg teleop_prefix_left)joint_states_compensated" to="$(arg robot_prefix_left)joint_states_compensated"/>
-    <remap from="$(arg teleop_prefix_left)gripper_pos_cmd" to="$(arg teleop_prefix_left)joint_states_single"/>
-    <remap from="$(arg teleop_prefix_left)gripper_effort_cmd" to="$(arg robot_prefix_left)joint_states_single"/>
+    <!-- Node-specific params (can_port, topic_prefix, remap, enable_gripper_haptic) are loaded from piper_dual.yaml above -->
   </node>
   
   <!-- Right arm node -->
   <node name="piper_teleop_right_node" pkg="piper_ctrl" type="piper_ctrl_node.py" output="screen">
+    <!-- Load common control config -->
     <rosparam file="$(find piper_ctrl)/config/piper_ctrl_mit_gravity.yaml" command="load"/>
-    <param name="can_port" value="$(arg right_can_port)"/>
-    <param name="topic_prefix" value="$(arg teleop_prefix_right)"/>
-    <param name="enable_gripper_haptic" value="true"/>
-    <remap from="$(arg teleop_prefix_right)joint_pos_cmd" to="$(arg teleop_prefix_right)joint_states_single"/>
-    <remap from="$(arg teleop_prefix_right)joint_tor_cmd" to="$(arg robot_prefix_right)joint_states_single"/>
-    <remap from="$(arg teleop_prefix_right)joint_states_compensated" to="$(arg robot_prefix_right)joint_states_compensated"/>
-    <remap from="$(arg teleop_prefix_right)gripper_pos_cmd" to="$(arg teleop_prefix_right)joint_states_single"/>
-    <remap from="$(arg teleop_prefix_right)gripper_effort_cmd" to="$(arg robot_prefix_right)joint_states_single"/>
+    <!-- Node-specific params (can_port, topic_prefix, remap, enable_gripper_haptic) are loaded from piper_dual.yaml above -->
   </node>
 </launch>

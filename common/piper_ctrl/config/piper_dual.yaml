@@ -1,0 +1,54 @@
+# Piper dual arm configuration file
+# This file contains parameters for both robot-side and teleop-side dual arm setup
+#
+# HOW IT WORKS:
+# - Parameters are loaded directly to each node's private namespace
+# - Modify this file and restart the launch to apply changes
+# - No need to modify launch files when changing topic mappings
+
+# ============================================================
+# Robot side configuration (piper_dual_robot.launch)
+# ============================================================
+# Left arm robot node
+piper_ctrl_left_node:
+  can_port: "can_left"
+  topic_prefix: "/robot/arm_left/"
+  remap:
+    # joint_pos_cmd_to: "/move_group/fake_controller_joint_states"
+    joint_pos_cmd_to: "/teleop/arm_left/joint_states_single"
+    gripper_pos_cmd_to: "/teleop/arm_left/joint_states_single"
+
+# Right arm robot node
+piper_ctrl_right_node:
+  can_port: "can_right"
+  topic_prefix: "/robot/arm_right/"
+  remap:
+    joint_pos_cmd_to: "/teleop/arm_right/joint_states_single"
+    gripper_pos_cmd_to: "/teleop/arm_right/joint_states_single"
+
+# ============================================================
+# Teleop side configuration (piper_dual_teleop.launch)
+# ============================================================
+# Left arm teleop node
+piper_teleop_left_node:
+  can_port: "can_left"
+  topic_prefix: "/teleop/arm_left/"
+  enable_gripper_haptic: true
+  remap:
+    joint_pos_cmd_to: "/teleop/arm_left/joint_states_single"
+    joint_tor_cmd_to: "/robot/arm_left/joint_states_single"
+    joint_states_compensated_to: "/robot/arm_left/joint_states_compensated"
+    gripper_pos_cmd_to: "/teleop/arm_left/joint_states_single"
+    gripper_effort_cmd_to: "/robot/arm_left/joint_states_single"
+
+# Right arm teleop node
+piper_teleop_right_node:
+  can_port: "can_right"
+  topic_prefix: "/teleop/arm_right/"
+  enable_gripper_haptic: true
+  remap:
+    joint_pos_cmd_to: "/teleop/arm_right/joint_states_single"
+    joint_tor_cmd_to: "/robot/arm_right/joint_states_single"
+    joint_states_compensated_to: "/robot/arm_right/joint_states_compensated"
+    gripper_pos_cmd_to: "/teleop/arm_right/joint_states_single"
+    gripper_effort_cmd_to: "/robot/arm_right/joint_states_single"
