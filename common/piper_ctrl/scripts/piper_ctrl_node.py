@@ -144,14 +144,35 @@ class C_PiperCtrlNode:
             else:
                 return self.topic_prefix + default_suffix
 
-        self.p_joint_pos_cmd_topic = ensure_topic_prefix("~p/joint_pos_cmd_topic", "joint_pos_cmd")
+        def get_remap_topic(remap_param_name, default_topic):
+            """Get remapped topic name from parameter, or use default if not set.
+            
+            If remap parameter is set, use it directly as the full topic path.
+            Otherwise, use the default topic (typically topic_prefix + suffix).
+            """
+            if rospy.has_param(remap_param_name):
+                return rospy.get_param(remap_param_name)
+            return default_topic
+
+        # Build default topic names (topic_prefix + suffix)
+        default_p_joint_pos_cmd_topic = ensure_topic_prefix("~p/joint_pos_cmd_topic", "joint_pos_cmd")
+        default_mit_joint_pos_cmd_topic = ensure_topic_prefix("~mit/joint_pos_cmd_topic", "joint_pos_cmd")
+        default_mit_joint_vel_cmd_topic = ensure_topic_prefix("~mit/joint_vel_cmd_topic", "joint_vel_cmd")
+        default_mit_joint_tor_cmd_topic = ensure_topic_prefix("~mit/joint_tor_cmd_topic", "joint_tor_cmd")
+        default_gripper_pos_cmd_topic = ensure_topic_prefix("~gripper_pos_cmd_topic", "gripper_pos_cmd")
+        default_gripper_effort_cmd_topic = ensure_topic_prefix("~gripper_effort_cmd_topic", "gripper_effort_cmd")
+
+        # Apply remap if configured (remap/xxx_to parameters override default topics)
+        self.p_joint_pos_cmd_topic = get_remap_topic("~remap/joint_pos_cmd_to", default_p_joint_pos_cmd_topic)
+        self.mit_joint_pos_cmd_topic = get_remap_topic("~remap/joint_pos_cmd_to", default_mit_joint_pos_cmd_topic)
+        self.mit_joint_vel_cmd_topic = get_remap_topic("~remap/joint_vel_cmd_to", default_mit_joint_vel_cmd_topic)
+        self.mit_joint_tor_cmd_topic = get_remap_topic("~remap/joint_tor_cmd_to", default_mit_joint_tor_cmd_topic)
+        self.gripper_pos_cmd_topic = get_remap_topic("~remap/gripper_pos_cmd_to", default_gripper_pos_cmd_topic)
+        self.gripper_effort_cmd_topic = get_remap_topic("~remap/gripper_effort_cmd_to", default_gripper_effort_cmd_topic)
+
         if self.ctrl_mode == "p":
             rospy.loginfo("Position control command topic: %s", self.p_joint_pos_cmd_topic)
-
-        self.mit_joint_pos_cmd_topic = ensure_topic_prefix("~mit/joint_pos_cmd_topic", "joint_pos_cmd")
-        self.mit_joint_vel_cmd_topic = ensure_topic_prefix("~mit/joint_vel_cmd_topic", "joint_vel_cmd")
-        self.mit_joint_tor_cmd_topic = ensure_topic_prefix("~mit/joint_tor_cmd_topic", "joint_tor_cmd")
-        if self.ctrl_mode == "mit":
+        else:
             rospy.loginfo("MIT control command topics:")
             if self.mit_enable_pos:
                 rospy.loginfo("  Position: %s", self.mit_joint_pos_cmd_topic)
@@ -161,19 +182,17 @@ class C_PiperCtrlNode:
                 rospy.loginfo("  Torque: %s", self.mit_joint_tor_cmd_topic)
 
         if self.mit_enable_gravity:
-            self.mit_joint_states_compensated_topic = ensure_topic_prefix(
+            default_joint_states_compensated_topic = ensure_topic_prefix(
                 "~mit/joint_states_compensated_topic", "joint_states_compensated"
+            )
+            self.mit_joint_states_compensated_topic = get_remap_topic(
+                "~remap/joint_states_compensated_to", default_joint_states_compensated_topic
             )
             rospy.loginfo("Gravity compensation topic: %s", self.mit_joint_states_compensated_topic)
 
-        # Gripper command topic
-        self.gripper_pos_cmd_topic = ensure_topic_prefix("~gripper_pos_cmd_topic", "gripper_pos_cmd")
+        # Log gripper topics
         if self.enable_gripper:
             rospy.loginfo("Gripper position command topic: %s", self.gripper_pos_cmd_topic)
-
-        # Gripper effort command topic
-        self.gripper_effort_cmd_topic = ensure_topic_prefix("~gripper_effort_cmd_topic", "gripper_effort_cmd")
-        if self.enable_gripper:
             rospy.loginfo("Gripper effort command topic: %s", self.gripper_effort_cmd_topic)
 
         # Thread rate parameters
