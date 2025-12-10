@@ -1,18 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-目标板位姿检测节点（camera→target）
-
-订阅：
-    /realsense_left/color/image_raw
-    /realsense_left/color/camera_info
-
-发布：
-    /handeye/target_pose (geometry_msgs/PoseStamped)
-    frame_id = 相机光学坐标系 (例如 realsense_left_color_optical_frame)
-
-内部使用 OpenCV ArUco 检测，计算标定板相对相机的姿态 T_cam_target
-"""
+"""ArUco GridBoard 位姿检测节点，发布 target 相对 camera 的位姿"""
 
 import sys
 from typing import Optional
@@ -20,16 +8,13 @@ from typing import Optional
 import cv2
 import numpy as np
 import rospy
-from sensor_msgs.msg import Image, CameraInfo
-from geometry_msgs.msg import PoseStamped
 from cv_bridge import CvBridge, CvBridgeError
+from geometry_msgs.msg import PoseStamped
 from scipy.spatial.transform import Rotation
+from sensor_msgs.msg import CameraInfo, Image
 
 
 class TargetDetector:
-    """ArUco 目标板检测器，发布目标板相对相机的位姿"""
-
-    # 支持的 ArUco 字典类型
     ARUCO_DICT_MAP = {
         "DICT_4X4_50": cv2.aruco.DICT_4X4_50,
         "DICT_4X4_100": cv2.aruco.DICT_4X4_100,
@@ -51,177 +36,115 @@ class TargetDetector:
     }
 
     def __init__(self) -> None:
-        # 从 ROS 参数服务器获取配置
+        # ROS topics
         self.image_topic = rospy.get_param("~image_topic", "/realsense_left/color/image_raw")
         self.camera_info_topic = rospy.get_param("~camera_info_topic", "/realsense_left/color/camera_info")
         self.target_pose_topic = rospy.get_param("~target_pose_topic", "/handeye/target_pose")
 
-        # ArUco 字典类型
+        # ArUco dictionary
         aruco_dict_name = rospy.get_param("~aruco_dict", "DICT_5X5_250")
         if aruco_dict_name not in self.ARUCO_DICT_MAP:
-            rospy.logwarn("Unknown ArUco dictionary '%s', using DICT_5X5_250", aruco_dict_name)
+            rospy.logwarn(f"Unknown ArUco dictionary '{aruco_dict_name}', using DICT_5X5_250")
             aruco_dict_name = "DICT_5X5_250"
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(self.ARUCO_DICT_MAP[aruco_dict_name])
 
-        # ArUco GridBoard 参数
-        self.markers_x = rospy.get_param("~markers_x", 3)  # 横向 marker 数量
-        self.markers_y = rospy.get_param("~markers_y", 4)  # 纵向 marker 数量
-        self.marker_size = rospy.get_param("~marker_size", 0.0564)  # ArUco marker 边长 (米)
-        self.marker_separation = rospy.get_param("~marker_separation", 0.0057)  # marker 间距 (米)
+        # GridBoard parameters
+        self.markers_x = rospy.get_param("~markers_x", 3)
+        self.markers_y = rospy.get_param("~markers_y", 4)
+        self.marker_size = rospy.get_param("~marker_size", 0.0564)
+        self.marker_separation = rospy.get_param("~marker_separation", 0.0057)
 
-        # ArUco 检测器参数
+        # ArUco detector and GridBoard (origin at bottom-left corner)
         self.detector_params = cv2.aruco.DetectorParameters()
         self.aruco_detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.detector_params)
-
-        # 创建 GridBoard，原点在左下角 marker 的左下角
         self.grid_board = cv2.aruco.GridBoard(
             (self.markers_x, self.markers_y),
             self.marker_size,
             self.marker_separation,
-            self.aruco_dict
+            self.aruco_dict,
         )
 
-        # 是否显示可视化窗口
+        # Visualization
         self.show_visualization = rospy.get_param("~show_visualization", True)
         self.window_name = "Target Detection"
+        if self.show_visualization:
+            cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
 
-        # 相机内参
+        # Camera intrinsics (populated from CameraInfo)
         self.camera_matrix: Optional[np.ndarray] = None
         self.dist_coeffs: Optional[np.ndarray] = None
         self.camera_frame_id: str = ""
 
         self.bridge = CvBridge()
-        self.last_image: Optional[np.ndarray] = None
         self.last_pose: Optional[PoseStamped] = None
 
-        # 初始化可视化窗口
-        if self.show_visualization:
-            cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
-
-        # 发布者
+        # Publisher & Subscribers
         self.pose_pub = rospy.Publisher(self.target_pose_topic, PoseStamped, queue_size=1)
+        rospy.Subscriber(self.camera_info_topic, CameraInfo, self._camera_info_cb, queue_size=1)
+        rospy.Subscriber(self.image_topic, Image, self._image_cb, queue_size=1)
 
-        # 订阅者
-        rospy.Subscriber(self.camera_info_topic, CameraInfo, self._camera_info_callback, queue_size=1)
-        rospy.Subscriber(self.image_topic, Image, self._image_callback, queue_size=1)
+        rospy.loginfo(
+            f"TargetDetector: {aruco_dict_name}, {self.markers_x}x{self.markers_y} board, "
+            f"size={self.marker_size}m, sep={self.marker_separation}m"
+        )
 
-        rospy.loginfo("TargetDetector initialized")
-        rospy.loginfo("  Image topic: %s", self.image_topic)
-        rospy.loginfo("  Camera info topic: %s", self.camera_info_topic)
-        rospy.loginfo("  Target pose topic: %s", self.target_pose_topic)
-        rospy.loginfo("  ArUco dictionary: %s", aruco_dict_name)
-        rospy.loginfo("  GridBoard: %dx%d markers", self.markers_x, self.markers_y)
-        rospy.loginfo("  Marker size: %.4fm, separation: %.4fm", self.marker_size, self.marker_separation)
-
-    def _camera_info_callback(self, msg: CameraInfo) -> None:
-        """接收相机内参"""
+    def _camera_info_cb(self, msg: CameraInfo) -> None:
         if self.camera_matrix is None:
             self.camera_matrix = np.array(msg.K).reshape(3, 3)
             self.dist_coeffs = np.array(msg.D)
             self.camera_frame_id = msg.header.frame_id
-            rospy.loginfo("Received camera intrinsics from frame: %s", self.camera_frame_id)
-            rospy.loginfo("Camera matrix:\n%s", self.camera_matrix)
-            rospy.loginfo("Distortion coefficients: %s", self.dist_coeffs)
+            rospy.loginfo(f"Camera intrinsics received from {self.camera_frame_id}")
 
-    def _image_callback(self, msg: Image) -> None:
-        """接收图像并检测目标板"""
+    def _image_cb(self, msg: Image) -> None:
         if self.camera_matrix is None:
-            rospy.logwarn_throttle(5.0, "Waiting for camera intrinsics...")
             return
 
         try:
-            # 转换为 OpenCV 图像
             image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
         except CvBridgeError as e:
-            rospy.logwarn_throttle(5.0, "CvBridge error: %s", str(e))
+            rospy.logwarn_throttle(5.0, f"CvBridge error: {e}")
             return
 
         if image is None:
-            rospy.logwarn_throttle(5.0, "Received empty image")
             return
 
-        self.last_image = image.copy()
-
-        # 检测目标板位姿
-        pose_result = self._detect_aruco(image, msg.header.stamp)
-
+        pose_result = self._detect_board(image, msg.header.stamp)
         if pose_result is not None:
             self.last_pose = pose_result
             self.pose_pub.publish(pose_result)
 
-    def _detect_aruco(self, image: np.ndarray, stamp: rospy.Time) -> Optional[PoseStamped]:
-        """使用 ArUco GridBoard 检测位姿，原点在 board 左下角"""
+    def _detect_board(self, image: np.ndarray, stamp: rospy.Time) -> Optional[PoseStamped]:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-        # 检测 ArUco markers
-        corners, ids, rejected = self.aruco_detector.detectMarkers(gray)
+        corners, ids, _ = self.aruco_detector.detectMarkers(gray)
 
         if ids is None or len(ids) == 0:
-            rospy.logdebug_throttle(2.0, "No ArUco markers detected")
             self._draw_visualization(image, None, None)
             return None
 
-        # 使用 GridBoard 估计整个板的位姿
-        # 获取 board 上所有 marker 的 3D 点和对应的 2D 图像点
         obj_points, img_points = self.grid_board.matchImagePoints(corners, ids)
-
         if obj_points is None or len(obj_points) == 0:
-            rospy.logdebug_throttle(
-                2.0,
-                "No board markers matched from detected markers: %s",
-                ids.flatten().tolist(),
-            )
             self._draw_visualization(image, corners, ids)
             return None
 
-        # 使用 solvePnP 估计 board 位姿
-        success, rvec, tvec = cv2.solvePnP(
-            obj_points, img_points, self.camera_matrix, self.dist_coeffs
-        )
-
+        success, rvec, tvec = cv2.solvePnP(obj_points, img_points, self.camera_matrix, self.dist_coeffs)
         if not success:
-            rospy.logwarn_throttle(2.0, "solvePnP failed for GridBoard")
             self._draw_visualization(image, corners, ids)
             return None
 
-        # 转换为 PoseStamped
-        pose_stamped = self._create_pose_stamped(rvec, tvec, stamp)
-
-        # 可视化
         self._draw_visualization(image, corners, ids, rvec, tvec)
+        return self._to_pose_stamped(rvec, tvec, stamp)
 
-        tvec_flat = tvec.flatten()
-        rospy.logdebug(
-            "Detected GridBoard (%d markers), position: [%.3f, %.3f, %.3f]",
-            len(ids),
-            tvec_flat[0],
-            tvec_flat[1],
-            tvec_flat[2],
-        )
-
-        return pose_stamped
-
-    def _create_pose_stamped(self, rvec: np.ndarray, tvec: np.ndarray, stamp: rospy.Time) -> PoseStamped:
-        """将旋转向量和平移向量转换为 PoseStamped"""
+    def _to_pose_stamped(self, rvec: np.ndarray, tvec: np.ndarray, stamp: rospy.Time) -> PoseStamped:
         pose = PoseStamped()
         pose.header.stamp = stamp
         pose.header.frame_id = self.camera_frame_id
 
-        # 平移
-        tvec_flat = tvec.flatten()
-        pose.pose.position.x = tvec_flat[0]
-        pose.pose.position.y = tvec_flat[1]
-        pose.pose.position.z = tvec_flat[2]
+        t = tvec.flatten()
+        pose.pose.position.x, pose.pose.position.y, pose.pose.position.z = t[0], t[1], t[2]
 
-        # 旋转向量转四元数
-        rvec_flat = rvec.flatten()
-        rotation = Rotation.from_rotvec(rvec_flat)
-        quat = rotation.as_quat()  # [x, y, z, w]
-
-        pose.pose.orientation.x = quat[0]
-        pose.pose.orientation.y = quat[1]
-        pose.pose.orientation.z = quat[2]
-        pose.pose.orientation.w = quat[3]
+        quat = Rotation.from_rotvec(rvec.flatten()).as_quat()
+        pose.pose.orientation.x, pose.pose.orientation.y = quat[0], quat[1]
+        pose.pose.orientation.z, pose.pose.orientation.w = quat[2], quat[3]
 
         return pose
 
@@ -233,43 +156,42 @@ class TargetDetector:
         rvec: Optional[np.ndarray] = None,
         tvec: Optional[np.ndarray] = None,
     ) -> None:
-        """绘制 ArUco GridBoard 检测可视化"""
         if not self.show_visualization:
             return
 
-        vis_image = image.copy()
+        vis = image.copy()
 
         if corners is not None and ids is not None:
-            cv2.aruco.drawDetectedMarkers(vis_image, corners, ids)
-
+            cv2.aruco.drawDetectedMarkers(vis, corners, ids)
             if rvec is not None and tvec is not None:
-                # 绘制坐标轴，原点在 board 左下角
-                axis_length = self.marker_size * 1.5
-                cv2.drawFrameAxes(vis_image, self.camera_matrix, self.dist_coeffs, rvec, tvec, axis_length)
+                cv2.drawFrameAxes(vis, self.camera_matrix, self.dist_coeffs, rvec, tvec, self.marker_size * 1.5)
 
-        # 显示状态信息
         status = "Detected" if rvec is not None else "Searching..."
         color = (0, 255, 0) if rvec is not None else (0, 0, 255)
-        cv2.putText(vis_image, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
+        cv2.putText(vis, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
 
         if self.last_pose is not None:
-            pos = self.last_pose.pose.position
-            text = f"Pos: [{pos.x:.3f}, {pos.y:.3f}, {pos.z:.3f}]"
-            cv2.putText(vis_image, text, (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            p = self.last_pose.pose.position
+            cv2.putText(
+                vis,
+                f"Pos: [{p.x:.3f}, {p.y:.3f}, {p.z:.3f}]",
+                (10, 70),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (255, 255, 255),
+                2,
+            )
 
-        self.last_vis_image = vis_image
+        self.last_vis_image = vis
 
     def spin(self) -> None:
-        """主循环"""
-        rospy.loginfo("Target detector running. Press 'q' to exit visualization.")
+        rospy.loginfo("Target detector running. Press 'q' to exit.")
         rate = rospy.Rate(30)
 
         while not rospy.is_shutdown():
             if self.show_visualization and hasattr(self, "last_vis_image"):
                 cv2.imshow(self.window_name, self.last_vis_image)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord("q"):
-                    rospy.loginfo("Quit visualization requested")
+                if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
             rate.sleep()
 
@@ -279,16 +201,13 @@ class TargetDetector:
 
 def main() -> int:
     rospy.init_node("detect_target", anonymous=False)
-
     try:
-        detector = TargetDetector()
-        detector.spin()
+        TargetDetector().spin()
     except rospy.ROSInterruptException:
         pass
     except Exception as e:
-        rospy.logerr("Error in target detector: %s", str(e))
+        rospy.logerr(f"Error: {e}")
         return 1
-
     return 0
 
 
