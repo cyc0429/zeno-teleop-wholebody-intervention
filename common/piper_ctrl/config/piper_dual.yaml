@@ -1,39 +1,115 @@
 # Piper dual arm configuration file
-# This file contains parameters for both robot-side and teleop-side dual arm setup
+# This file contains node-specific parameters: CAN port, topics, gripper settings
 #
 # HOW IT WORKS:
-# - Parameters are loaded directly to each node's private namespace
+# - Parameters are loaded to each node's private namespace
+# - Control parameters (kp, kd, etc.) are in piper_ctrl_mit.yaml
 # - Modify this file and restart the launch to apply changes
-# - No need to modify launch files when changing topic mappings
 
-# ============================================================
+# ============================================================================
 # Robot side configuration (piper_dual_robot.launch)
-# ============================================================
+# ============================================================================
+
 # Left arm robot node
 piper_ctrl_left_node:
+  # Communication
   can_port: "can_left"
   topic_prefix: "/robot/arm_left/"
+  
+  # Basic settings
+  auto_enable: true
+  
+  # Gripper settings
+  gripper_exist: true
+  gripper_val_mutiple: 1.25
+  enable_gripper: true
+  enable_gripper_haptic: false
+  gripper_range: 0.08
+  gripper_reverse: false
+  
+  # Topic names (relative to topic_prefix)
+  gripper_pos_cmd_topic: "gripper_pos_cmd"
+  gripper_effort_cmd_topic: "gripper_effort_cmd"
+  p:
+    joint_pos_cmd_topic: "joint_pos_cmd"
+  mit:
+    joint_pos_cmd_topic: "joint_pos_cmd"
+    joint_vel_cmd_topic: "joint_vel_cmd"
+    joint_tor_cmd_topic: "joint_tor_cmd"
+    joint_states_compensated_topic: "joint_states_compensated"
+  
+  # Topic remapping (absolute paths)
   remap:
-    # joint_pos_cmd_to: "/move_group/fake_controller_joint_states"
-    joint_pos_cmd_to: "/teleop/arm_left/joint_states_single"
+    joint_pos_cmd_to: "/robot/arm_left/joint_pos_cmd"
     gripper_pos_cmd_to: "/teleop/arm_left/joint_states_single"
 
 # Right arm robot node
 piper_ctrl_right_node:
+  # Communication
   can_port: "can_right"
   topic_prefix: "/robot/arm_right/"
+  
+  # Basic settings
+  auto_enable: true
+  
+  # Gripper settings
+  gripper_exist: true
+  gripper_val_mutiple: 1.25
+  enable_gripper: true
+  enable_gripper_haptic: false
+  gripper_range: 0.08
+  gripper_reverse: false
+  
+  # Topic names (relative to topic_prefix)
+  gripper_pos_cmd_topic: "gripper_pos_cmd"
+  gripper_effort_cmd_topic: "gripper_effort_cmd"
+  p:
+    joint_pos_cmd_topic: "joint_pos_cmd"
+  mit:
+    joint_pos_cmd_topic: "joint_pos_cmd"
+    joint_vel_cmd_topic: "joint_vel_cmd"
+    joint_tor_cmd_topic: "joint_tor_cmd"
+    joint_states_compensated_topic: "joint_states_compensated"
+  
+  # Topic remapping (absolute paths)
   remap:
-    joint_pos_cmd_to: "/teleop/arm_right/joint_states_single"
+    joint_pos_cmd_to: "/robot/arm_left/joint_pos_cmd"
+    # joint_pos_cmd_to: "/teleop/arm_right/joint_states_single"
     gripper_pos_cmd_to: "/teleop/arm_right/joint_states_single"
 
-# ============================================================
+# ============================================================================
 # Teleop side configuration (piper_dual_teleop.launch)
-# ============================================================
+# ============================================================================
+
 # Left arm teleop node
 piper_teleop_left_node:
+  # Communication
   can_port: "can_left"
   topic_prefix: "/teleop/arm_left/"
+  
+  # Basic settings
+  auto_enable: true
+  
+  # Gripper settings
+  gripper_exist: true
+  gripper_val_mutiple: 1.0
+  enable_gripper: true
   enable_gripper_haptic: true
+  gripper_range: 0.08
+  gripper_reverse: true
+  
+  # Topic names (relative to topic_prefix)
+  gripper_pos_cmd_topic: "gripper_pos_cmd"
+  gripper_effort_cmd_topic: "gripper_effort_cmd"
+  p:
+    joint_pos_cmd_topic: "joint_pos_cmd"
+  mit:
+    joint_pos_cmd_topic: "joint_pos_cmd"
+    joint_vel_cmd_topic: "joint_vel_cmd"
+    joint_tor_cmd_topic: "joint_tor_cmd"
+    joint_states_compensated_topic: "joint_states_compensated"
+  
+  # Topic remapping (absolute paths)
   remap:
     joint_pos_cmd_to: "/teleop/arm_left/joint_states_single"
     joint_tor_cmd_to: "/robot/arm_left/joint_states_single"
@@ -43,9 +119,33 @@ piper_teleop_left_node:
 
 # Right arm teleop node
 piper_teleop_right_node:
+  # Communication
   can_port: "can_right"
   topic_prefix: "/teleop/arm_right/"
+  
+  # Basic settings
+  auto_enable: true
+  
+  # Gripper settings
+  gripper_exist: true
+  gripper_val_mutiple: 1.0
+  enable_gripper: true
   enable_gripper_haptic: true
+  gripper_range: 0.08
+  gripper_reverse: true
+  
+  # Topic names (relative to topic_prefix)
+  gripper_pos_cmd_topic: "gripper_pos_cmd"
+  gripper_effort_cmd_topic: "gripper_effort_cmd"
+  p:
+    joint_pos_cmd_topic: "joint_pos_cmd"
+  mit:
+    joint_pos_cmd_topic: "joint_pos_cmd"
+    joint_vel_cmd_topic: "joint_vel_cmd"
+    joint_tor_cmd_topic: "joint_tor_cmd"
+    joint_states_compensated_topic: "joint_states_compensated"
+  
+  # Topic remapping (absolute paths)
   remap:
     joint_pos_cmd_to: "/teleop/arm_right/joint_states_single"
     joint_tor_cmd_to: "/robot/arm_right/joint_states_single"

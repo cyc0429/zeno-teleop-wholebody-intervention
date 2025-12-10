@@ -53,15 +53,9 @@
     </group>
 
     <!-- Launch dual-arm control node -->
+    <!-- Note: Parameters (can_port, topic_prefix, remap) are configured in piper_dual.yaml -->
     <group if="$(arg enable_dual_arm)">
-        <include file="$(find piper_ctrl)/launch/piper_dual_robot.launch">
-            <arg name="left_can_port" value="$(arg left_can_port)" />
-            <arg name="right_can_port" value="$(arg right_can_port)" />
-            <arg name="robot_prefix_left" value="/robot/arm_left/" />
-            <arg name="robot_prefix_right" value="/robot/arm_right/" />
-            <arg name="teleop_prefix_left" value="/teleop/arm_left/" />
-            <arg name="teleop_prefix_right" value="/teleop/arm_right/" />
-        </include>
+        <include file="$(find piper_ctrl)/launch/piper_dual_robot.launch" />
     </group>
 
     <!-- Launch cameras -->

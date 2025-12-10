@@ -1,61 +1,31 @@
-# Piper robot arm control node configuration file
-# All parameters can be set via ROS parameter server
+# Piper robot arm MIT/Position control parameters
+# This file contains ONLY control-related parameters (shared across all nodes)
+# For node-specific parameters (can_port, topics, gripper), see piper_dual.yaml
 
-# Basic parameters
-# CAN port name
-can_port: "can0"
-
-# Topic prefix, default is /, can be set to /teleop/arm_left/ or /robot/arm_right/ etc.
-topic_prefix: "/"
-
-# Auto enable, default false
-auto_enable: true
-
-# Gripper exists, default true
-gripper_exist: true
-
-# Gripper value multiple, default 1.0
-gripper_val_mutiple: 1.25
-
-# Enable gripper control, default true
-enable_gripper: true
-
-# Enable gripper haptic control, default false
-# If true, gripper effort will be controlled from gripper_cmd topic
-enable_gripper_haptic: false
-
-gripper_range: 0.08
-
-gripper_reverse: false
-
-# Gripper command topic name (relative path, will automatically add topic_prefix as prefix)
-gripper_pos_cmd_topic: "gripper_pos_cmd"
-
-gripper_effort_cmd_topic: "gripper_effort_cmd"
-
-# Control mode
+# =============================================================================
+# Control Mode
+# =============================================================================
 # Control method: 'p' (position control) or 'mit' (MIT control)
-ctrl_mode: "mit" # Optional values: "p", "mit"
+ctrl_mode: "mit"  # Optional values: "p", "mit"
 
-# Position control parameters (used when ctrl_mode is 'p')
+# =============================================================================
+# Position Control Parameters (used when ctrl_mode is 'p')
+# =============================================================================
 p:
   # Speed parameter, range 0-100
   speed: 50
 
-  # Position command topic name (relative path, will automatically add topic_prefix as prefix)
-  # Example: if topic_prefix is "/teleop/arm_left/", the actual topic will be "/teleop/arm_left/joint_pos_cmd"
-  # If an absolute path (starting with /) is provided, the leading / will be automatically removed and topic_prefix will be added
-  joint_pos_cmd_topic: "joint_pos_cmd"
-
-# MIT control parameters (used when ctrl_mode is 'mit')
+# =============================================================================
+# MIT Control Parameters (used when ctrl_mode is 'mit')
+# =============================================================================
 mit:
   # Speed parameter, range 0-100
   speed: 50
 
-  # Proportional gain
+  # Proportional gain (can be single value or list of 6 for each joint)
   kp: 7.0
 
-  # Derivative gain
+  # Derivative gain (can be single value or list of 6 for each joint)
   kd: 0.8
 
   # Enable position control
@@ -70,24 +40,14 @@ mit:
   # Enable gravity compensation
   enable_gravity: false
 
-  # Torque scale factor, can be a single value (applied to all joints) or a list of 6 values (one for each joint)
+  # Torque scale factor
   # Single value example: torque_scale: 1.0
   # List example: torque_scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
   torque_scale: 1.0
 
-  # Position command topic name (relative path, will automatically add topic_prefix as prefix)
-  joint_pos_cmd_topic: "joint_pos_cmd"
-
-  # Velocity command topic name (relative path, will automatically add topic_prefix as prefix)
-  joint_vel_cmd_topic: "joint_vel_cmd"
-
-  # Torque command topic name (relative path, will automatically add topic_prefix as prefix)
-  joint_tor_cmd_topic: "joint_tor_cmd"
-
-  # Gravity compensation topic name (relative path, will automatically add topic_prefix as prefix, used when enable_gravity is true)
-  joint_states_compensated_topic: "joint_states_compensated"
-
-# Thread rate parameters
+# =============================================================================
+# Thread Rate Parameters
+# =============================================================================
 # Publish thread rate (Hz)
 publish_rate: 100.0
 
@@ -97,17 +57,14 @@ control_rate: 50.0
 # Subscribe thread rate (Hz)
 subscribe_rate: 50.0
 
-# Filter parameters for smoothing published data
+# =============================================================================
+# Filter Parameters for smoothing published data
+# =============================================================================
 filter:
-  # Enable filter, default true
+  # Enable filter
   enable: true
 
-  # Filter alpha values (0.0-1.0), higher values = less smoothing but faster response
-  # alpha_position: smoothing factor for joint positions (default: 0.7)
+  # Filter alpha values (0.0-1.0), higher = less smoothing but faster response
   alpha_position: 0.7
-
-  # alpha_velocity: smoothing factor for joint velocities (default: 0.5)
   alpha_velocity: 0.5
-
-  # alpha_effort: smoothing factor for joint efforts (default: 0.5)
   alpha_effort: 0.1
