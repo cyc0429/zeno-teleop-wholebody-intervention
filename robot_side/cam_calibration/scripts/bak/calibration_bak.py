@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""手眼标定节点，使用 AX=YB 求解器同时估计 gripper2left 与 base2top 变换"""
+"""手眼标定节点，使用 cv2.calibrateHandEye 计算 gripper->camera 变换"""
 
 import json
 import os
@@ -9,6 +9,7 @@ import threading
 from datetime import datetime
 from typing import List, Optional, Tuple
 
+import cv2
 import numpy as np
 import rospy
 import rospkg
@@ -16,27 +17,41 @@ from geometry_msgs.msg import PoseStamped
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import JointState
 from std_srvs.srv import Trigger, TriggerResponse
-from pymlg import SE3
-
-from solver import AXYSolver
 
 
 class HandEyeCalibrator:
+    """手眼标定器，支持 eye-in-hand 和 eye-to-hand 两种模式"""
+
+    # cv2.calibrateHandEye 支持的方法
+    CALIB_METHODS = {
+        "TSAI": cv2.CALIB_HAND_EYE_TSAI,
+        "PARK": cv2.CALIB_HAND_EYE_PARK,
+        "HORAUD": cv2.CALIB_HAND_EYE_HORAUD,
+        "ANDREFF": cv2.CALIB_HAND_EYE_ANDREFF,
+        "DANIILIDIS": cv2.CALIB_HAND_EYE_DANIILIDIS,
+    }
+
     def __init__(self) -> None:
         # ROS topics 配置
         self.joint_state_topic = rospy.get_param("~joint_state_topic", "/robot/arm_left/joint_states_single")
         self.end_pose_topic = rospy.get_param("~end_pose_topic", "/robot/arm_left/end_pose")
-
         self.target_pose_topic = rospy.get_param("~target_pose_topic", "/handeye/left_cam_from_target")
-        self.top_target_pose_topic = rospy.get_param("~top_target_pose_topic", "/handeye/top_cam_from_target")
         self.result_pose_topic = rospy.get_param("~result_pose_topic", "/handeye/cam_to_end")
         self.joint_cmd_topic = rospy.get_param("~joint_cmd_topic", "/robot/arm_left/joint_pos_cmd")
 
+        # 标定方法
+        method_name = rospy.get_param("~calibration_method", "TSAI")
+        if method_name not in self.CALIB_METHODS:
+            rospy.logwarn(f"Unknown calibration method '{method_name}', using TSAI")
+            method_name = "TSAI"
+        self.calib_method = self.CALIB_METHODS[method_name]
+        rospy.loginfo(f"Using calibration method: {method_name}")
+
         # 最小采样数量
-        self.min_samples = rospy.get_param("~min_samples", 5)
+        self.min_samples = rospy.get_param("~min_samples", 10)
 
         # 轨迹执行参数
-        self.settle_time = rospy.get_param("~settle_time", 30.0)  # 到达点后等待时间(秒)
+        self.settle_time = rospy.get_param("~settle_time", 20.0)  # 到达点后等待时间(秒)
         self.interpolation_steps = rospy.get_param("~interpolation_steps", 50)  # 插值步数
         self.interpolation_duration = rospy.get_param("~interpolation_duration", 2.0)  # 插值持续时间(秒)
         self.trajectory_file = rospy.get_param("~trajectory_file", "")  # 轨迹文件路径
@@ -52,25 +67,20 @@ class HandEyeCalibrator:
         self.joint_states: Optional[JointState] = None
         self.end_pose: Optional[PoseStamped] = None
         self.target_pose: Optional[PoseStamped] = None
-        self.top_target_pose: Optional[PoseStamped] = None
 
-        # 采集的样本数据（统一 xxx2xxx 命名，AfromB 等价于 A2B）
-        self.R_base2gripper_samples: List[np.ndarray] = []  # end_pose 提供 base2gripper
-        self.t_base2gripper_samples: List[np.ndarray] = []
-        self.R_left2target_samples: List[np.ndarray] = []   # /handeye/left_cam_from_target
-        self.t_left2target_samples: List[np.ndarray] = []
-        self.R_top2target_samples: List[np.ndarray] = []    # /handeye/top_cam_from_target
-        self.t_top2target_samples: List[np.ndarray] = []
+        # 采集的样本数据
+        self.R_gripper2base_samples: List[np.ndarray] = []
+        self.t_gripper2base_samples: List[np.ndarray] = []
+        self.R_target2cam_samples: List[np.ndarray] = []
+        self.t_target2cam_samples: List[np.ndarray] = []
 
         # 记录的关节角列表
         self.recorded_joint_poses: List[np.ndarray] = []
 
-        # 标定结果（gripper2left 与 base2top）
+        # 标定结果（gripper -> camera）
         self.calib_result: Optional[PoseStamped] = None
-        self.R_gripper2left: Optional[np.ndarray] = None
-        self.t_gripper2left: Optional[np.ndarray] = None
-        self.R_base2top: Optional[np.ndarray] = None
-        self.t_base2top: Optional[np.ndarray] = None
+        self.R_gripper2cam: Optional[np.ndarray] = None
+        self.t_gripper2cam: Optional[np.ndarray] = None
         
         # 当前使用的轨迹文件路径
         self.current_trajectory_file: Optional[str] = None
@@ -83,7 +93,6 @@ class HandEyeCalibrator:
         rospy.Subscriber(self.joint_state_topic, JointState, self._joint_state_cb, queue_size=1)
         rospy.Subscriber(self.end_pose_topic, PoseStamped, self._end_pose_cb, queue_size=1)
         rospy.Subscriber(self.target_pose_topic, PoseStamped, self._target_pose_cb, queue_size=1)
-        rospy.Subscriber(self.top_target_pose_topic, PoseStamped, self._top_target_pose_cb, queue_size=1)
 
         # Services
         rospy.Service("~capture_sample", Trigger, self._capture_sample_srv)
@@ -101,7 +110,6 @@ class HandEyeCalibrator:
         rospy.loginfo(f"  Joint state topic: {self.joint_state_topic}")
         rospy.loginfo(f"  End pose topic: {self.end_pose_topic}")
         rospy.loginfo(f"  Target pose topic: {self.target_pose_topic}")
-        rospy.loginfo(f"  Top target pose topic: {self.top_target_pose_topic}")
         rospy.loginfo(f"  Result pose topic: {self.result_pose_topic}")
         rospy.loginfo(f"  Joint cmd topic: {self.joint_cmd_topic}")
         rospy.loginfo(f"  Minimum samples required: {self.min_samples}")
@@ -123,19 +131,14 @@ class HandEyeCalibrator:
             self.joint_states = msg
 
     def _end_pose_cb(self, msg: PoseStamped) -> None:
-        """末端位姿回调 (base2gripper，AfromB 等价 A2B)"""
+        """末端位姿回调 (gripper -> base)"""
         with self.lock:
             self.end_pose = msg
 
     def _target_pose_cb(self, msg: PoseStamped) -> None:
-        """目标位姿回调 (left2target，对应 left_cam_from_target)"""
+        """目标位姿回调 (target -> camera)"""
         with self.lock:
             self.target_pose = msg
-
-    def _top_target_pose_cb(self, msg: PoseStamped) -> None:
-        """顶摄相机位姿回调 (top2target，对应 top_cam_from_target)"""
-        with self.lock:
-            self.top_target_pose = msg
 
     def _quat_to_matrix(self, quat: np.ndarray) -> np.ndarray:
         """四元数转旋转矩阵 (兼容旧版 scipy)"""
@@ -188,20 +191,14 @@ class HandEyeCalibrator:
         with self.lock:
             return {
                 "joint_poses": [pose.tolist() for pose in self.recorded_joint_poses],
-                "R_base2gripper_samples": [mat.tolist() for mat in self.R_base2gripper_samples],
-                "t_base2gripper_samples": [t.flatten().tolist() for t in self.t_base2gripper_samples],
-                "R_left2target_samples": [mat.tolist() for mat in self.R_left2target_samples],
-                "t_left2target_samples": [t.flatten().tolist() for t in self.t_left2target_samples],
-                "R_top2target_samples": [mat.tolist() for mat in self.R_top2target_samples],
-                "t_top2target_samples": [t.flatten().tolist() for t in self.t_top2target_samples],
+                "R_gripper2base_samples": [mat.tolist() for mat in self.R_gripper2base_samples],
+                "t_gripper2base_samples": [t.flatten().tolist() for t in self.t_gripper2base_samples],
+                "R_target2cam_samples": [mat.tolist() for mat in self.R_target2cam_samples],
+                "t_target2cam_samples": [t.flatten().tolist() for t in self.t_target2cam_samples],
                 "calib_result": self._pose_to_dict(self.calib_result),
-                "R_gripper2left": self.R_gripper2left.tolist() if self.R_gripper2left is not None else None,
-                "t_gripper2left": (
-                    self.t_gripper2left.flatten().tolist() if self.t_gripper2left is not None else None
-                ),
-                "R_base2top": self.R_base2top.tolist() if self.R_base2top is not None else None,
-                "t_base2top": (
-                    self.t_base2top.flatten().tolist() if self.t_base2top is not None else None
+                "R_gripper2cam": self.R_gripper2cam.tolist() if self.R_gripper2cam is not None else None,
+                "t_gripper2cam": (
+                    self.t_gripper2cam.flatten().tolist() if self.t_gripper2cam is not None else None
                 ),
             }
 
@@ -241,10 +238,6 @@ class HandEyeCalibrator:
 
         return pose
 
-    def _rt_to_se3(self, R: np.ndarray, t: np.ndarray) -> np.ndarray:
-        """将 R, t 转为 4x4 SE(3) 矩阵"""
-        return SE3.from_components(R, t.flatten())
-
     def _capture_sample_srv(self, req) -> TriggerResponse:
         """服务: 采集当前位姿样本"""
         with self.lock:
@@ -252,23 +245,18 @@ class HandEyeCalibrator:
                 return TriggerResponse(success=False, message="No end pose received yet")
             if self.target_pose is None:
                 return TriggerResponse(success=False, message="No target pose received yet")
-            if self.top_target_pose is None:
-                return TriggerResponse(success=False, message="No top camera pose received yet")
 
-            # 转换位姿为 R, t（统一 xxx2xxx 命名）
-            R_base2gripper, t_base2gripper = self._pose_to_rt(self.end_pose)          # base2gripper
-            R_left2target, t_left2target = self._pose_to_rt(self.target_pose)         # left2target
-            R_top2target, t_top2target = self._pose_to_rt(self.top_target_pose)       # top2target
+            # 转换位姿为 R, t
+            R_gripper2base, t_gripper2base = self._pose_to_rt(self.end_pose)
+            R_target2cam, t_target2cam = self._pose_to_rt(self.target_pose)
 
             # 存储样本
-            self.R_base2gripper_samples.append(R_base2gripper)
-            self.t_base2gripper_samples.append(t_base2gripper)
-            self.R_left2target_samples.append(R_left2target)
-            self.t_left2target_samples.append(t_left2target)
-            self.R_top2target_samples.append(R_top2target)
-            self.t_top2target_samples.append(t_top2target)
+            self.R_gripper2base_samples.append(R_gripper2base)
+            self.t_gripper2base_samples.append(t_gripper2base)
+            self.R_target2cam_samples.append(R_target2cam)
+            self.t_target2cam_samples.append(t_target2cam)
 
-            num_samples = len(self.R_base2gripper_samples)
+            num_samples = len(self.R_gripper2base_samples)
             rospy.loginfo(f"Sample captured. Total samples: {num_samples}")
 
             return TriggerResponse(
@@ -279,7 +267,7 @@ class HandEyeCalibrator:
     def _compute_calibration_srv(self, req) -> TriggerResponse:
         """服务: 计算手眼标定"""
         with self.lock:
-            num_samples = len(self.R_base2gripper_samples)
+            num_samples = len(self.R_gripper2base_samples)
             if num_samples < self.min_samples:
                 return TriggerResponse(
                     success=False,
@@ -287,59 +275,27 @@ class HandEyeCalibrator:
                 )
 
             try:
-                # 使用 AX=YB 求解器，联合求解 X(gripper2left) 与 Y(base2top)
-                solver = AXYSolver()
-                A_list: List[np.ndarray] = []  # base2gripper
-                B_list: List[np.ndarray] = []  # top->target * target->left = top->left
+                # 执行手眼标定（OpenCV 返回的结果对应 gripper->camera）
+                R_gripper2cam, t_gripper2cam = cv2.calibrateHandEye(
+                    self.R_gripper2base_samples,
+                    self.t_gripper2base_samples,
+                    self.R_target2cam_samples,
+                    self.t_target2cam_samples,
+                    method=self.calib_method,
+                )
 
-                for R_b2g, t_b2g, R_left2t, t_left2t, R_top2t, t_top2t in zip(
-                    self.R_base2gripper_samples,
-                    self.t_base2gripper_samples,
-                    self.R_left2target_samples,
-                    self.t_left2target_samples,
-                    self.R_top2target_samples,
-                    self.t_top2target_samples,
-                ):
-                    T_b2g = self._rt_to_se3(R_b2g, t_b2g)           # base2gripper
-
-                    T_left2target = self._rt_to_se3(R_left2t, t_left2t)  # target->left
-                    T_target2left = SE3.inverse(T_left2target)
-                    T_top2target = self._rt_to_se3(R_top2t, t_top2t)     # top->target
-
-                    A_list.append(T_b2g)
-                    B_list.append(T_top2target @ T_target2left)
-
-                sol, X_hat, Y_hat = solver.solve(A_list, B_list)
-                if not sol.success:
-                    rospy.logwarn(f"AX=YB solver did not fully converge: {sol.message}")
-
-                R_gripper2left, t_gripper2left = SE3.to_components(X_hat)
-                R_base2top, t_base2top = SE3.to_components(Y_hat)
-
-                self.R_gripper2left = R_gripper2left
-                self.t_gripper2left = t_gripper2left.reshape((3, 1))
-                self.R_base2top = R_base2top
-                self.t_base2top = t_base2top.reshape((3, 1))
-                self.calib_result = self._rt_to_pose_stamped(R_gripper2left, self.t_gripper2left, "end_effector")
+                self.R_gripper2cam = R_gripper2cam
+                self.t_gripper2cam = t_gripper2cam
+                self.calib_result = self._rt_to_pose_stamped(R_gripper2cam, t_gripper2cam, "end_effector")
 
                 # 计算旋转角度和平移距离用于日志
-                euler = self._matrix_to_euler(R_gripper2left, "xyz", degrees=True)
-                t_flat = self.t_gripper2left.flatten()
+                euler = self._matrix_to_euler(R_gripper2cam, "xyz", degrees=True)
+                t_flat = t_gripper2cam.flatten()
 
                 rospy.loginfo("=" * 50)
-                rospy.loginfo("Hand-eye calibration completed! (gripper2left & base2top)")
+                rospy.loginfo("Hand-eye calibration completed! (gripper -> camera)")
                 rospy.loginfo(f"Translation (x, y, z): [{t_flat[0]:.4f}, {t_flat[1]:.4f}, {t_flat[2]:.4f}] m")
                 rospy.loginfo(f"Rotation (rx, ry, rz): [{euler[0]:.2f}, {euler[1]:.2f}, {euler[2]:.2f}] deg")
-                if self.R_base2top is not None and self.t_base2top is not None:
-                    y_euler = self._matrix_to_euler(self.R_base2top, "xyz", degrees=True)
-                    y_t_flat = self.t_base2top.flatten()
-                    rospy.loginfo("Base -> Top camera transform:")
-                    rospy.loginfo(
-                        f"  Translation (x, y, z): [{y_t_flat[0]:.4f}, {y_t_flat[1]:.4f}, {y_t_flat[2]:.4f}] m"
-                    )
-                    rospy.loginfo(
-                        f"  Rotation (rx, ry, rz): [{y_euler[0]:.2f}, {y_euler[1]:.2f}, {y_euler[2]:.2f}] deg"
-                    )
                 rospy.loginfo("=" * 50)
 
                 # 发布结果
@@ -357,19 +313,17 @@ class HandEyeCalibrator:
     def _clear_samples_srv(self, req) -> TriggerResponse:
         """服务: 清除所有采集的样本"""
         with self.lock:
-            self.R_base2gripper_samples.clear()
-            self.t_base2gripper_samples.clear()
-            self.R_left2target_samples.clear()
-            self.t_left2target_samples.clear()
-            self.R_top2target_samples.clear()
-            self.t_top2target_samples.clear()
+            self.R_gripper2base_samples.clear()
+            self.t_gripper2base_samples.clear()
+            self.R_target2cam_samples.clear()
+            self.t_target2cam_samples.clear()
             rospy.loginfo("All samples cleared")
             return TriggerResponse(success=True, message="All samples cleared")
 
     def _save_result_srv(self, req) -> TriggerResponse:
         """服务: 保存标定结果到文件"""
         with self.lock:
-            if self.R_gripper2left is None or self.t_gripper2left is None:
+            if self.R_gripper2cam is None or self.t_gripper2cam is None:
                 return TriggerResponse(success=False, message="No calibration result available")
 
         try:
@@ -382,23 +336,15 @@ class HandEyeCalibrator:
                 # 更新标定结果字段
                 with self.lock:
                     data['calib_result'] = self._pose_to_dict(self.calib_result)
-                    data['R_gripper2left'] = self.R_gripper2left.tolist() if self.R_gripper2left is not None else None
-                    data['t_gripper2left'] = (
-                        self.t_gripper2left.flatten().tolist() if self.t_gripper2left is not None else None
+                    data['R_gripper2cam'] = self.R_gripper2cam.tolist() if self.R_gripper2cam is not None else None
+                    data['t_gripper2cam'] = (
+                        self.t_gripper2cam.flatten().tolist() if self.t_gripper2cam is not None else None
                     )
                     # 同时更新样本数据
-                    data['R_base2gripper_samples'] = [mat.tolist() for mat in self.R_base2gripper_samples]
-                    data['t_base2gripper_samples'] = [t.flatten().tolist() for t in self.t_base2gripper_samples]
-                    data['R_left2target_samples'] = [mat.tolist() for mat in self.R_left2target_samples]
-                    data['t_left2target_samples'] = [t.flatten().tolist() for t in self.t_left2target_samples]
-                    data['R_top2target_samples'] = [mat.tolist() for mat in self.R_top2target_samples]
-                    data['t_top2target_samples'] = [t.flatten().tolist() for t in self.t_top2target_samples]
-                    data['R_base2top'] = (
-                        self.R_base2top.tolist() if self.R_base2top is not None else None
-                    )
-                    data['t_base2top'] = (
-                        self.t_base2top.flatten().tolist() if self.t_base2top is not None else None
-                    )
+                    data['R_gripper2base_samples'] = [mat.tolist() for mat in self.R_gripper2base_samples]
+                    data['t_gripper2base_samples'] = [t.flatten().tolist() for t in self.t_gripper2base_samples]
+                    data['R_target2cam_samples'] = [mat.tolist() for mat in self.R_target2cam_samples]
+                    data['t_target2cam_samples'] = [t.flatten().tolist() for t in self.t_target2cam_samples]
                 
                 # 保存更新后的文件
                 with open(self.current_trajectory_file, 'w', encoding='utf-8') as f:
@@ -541,12 +487,10 @@ class HandEyeCalibrator:
 
             # 清除之前的样本
             with self.lock:
-                self.R_base2gripper_samples.clear()
-                self.t_base2gripper_samples.clear()
-                self.R_left2target_samples.clear()
-                self.t_left2target_samples.clear()
-                self.R_top2target_samples.clear()
-                self.t_top2target_samples.clear()
+                self.R_gripper2base_samples.clear()
+                self.t_gripper2base_samples.clear()
+                self.R_target2cam_samples.clear()
+                self.t_target2cam_samples.clear()
 
             # 获取当前关节位置作为起点
             with self.lock:
@@ -590,7 +534,7 @@ class HandEyeCalibrator:
 
             # 所有点采样完成，检查采样数量
             with self.lock:
-                num_samples = len(self.R_base2gripper_samples)
+                num_samples = len(self.R_gripper2base_samples)
 
             if num_samples >= self.min_samples:
                 # 计算标定
@@ -636,15 +580,13 @@ class HandEyeCalibrator:
                 has_joint = self.joint_states is not None
                 has_end = self.end_pose is not None
                 has_target = self.target_pose is not None
-                has_top_target = self.top_target_pose is not None
-                num_samples = len(self.R_base2gripper_samples)
+                num_samples = len(self.R_gripper2base_samples)
 
             rospy.loginfo_throttle(
                 10.0,
                 f"Status - Joint: {'OK' if has_joint else 'NO'}, "
                 f"EndPose: {'OK' if has_end else 'NO'}, "
                 f"Target: {'OK' if has_target else 'NO'}, "
-                f"TopTarget: {'OK' if has_top_target else 'NO'}, "
                 f"Samples: {num_samples}/{self.min_samples}",
             )
 

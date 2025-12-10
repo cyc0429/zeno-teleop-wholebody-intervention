@@ -9,13 +9,15 @@
     <!-- <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" /> -->
 
     <param name="robot_description" textfile="$(find piper_description)/urdf/piper_description.urdf" />
-    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" >
+        <rosparam param="source_list">[/robot/arm_left/joint_states_single]</rosparam>
+    </node>
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find cam_calibration)/rviz/default.rviz" />
 
 
     <!-- 目标板位姿检测-->
-    <include file="$(find cam_calibration)/launch/detect_target.launch">
+    <!-- <include file="$(find cam_calibration)/launch/detect_target.launch">
         <arg name="node_prefix" default="left" />
         <arg name="image_topic" default="/realsense_left/color/image_raw" />
         <arg name="camera_info_topic" default="/realsense_left/color/camera_info" />
@@ -39,7 +41,7 @@
         <arg name="marker_size" value="$(arg marker_size)" />
         <arg name="marker_separation" value="$(arg marker_separation)" />
         <arg name="show_visualization" default="true" />
-    </include>
+    </include> -->
 
     <!-- 发布 handeye TF（gripper -> camera） -->
     <node pkg="cam_calibration" type="tf_publisher.py" name="handeye_tf_publisher" output="screen">
