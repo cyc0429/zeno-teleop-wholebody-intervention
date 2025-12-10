@@ -17,7 +17,7 @@
 
 
     <!-- 目标板位姿检测-->
-    <include file="$(find cam_calibration)/launch/detect_target.launch">
+    <!-- <include file="$(find cam_calibration)/launch/detect_target.launch">
         <arg name="node_prefix" default="left" />
         <arg name="image_topic" default="/realsense_left/color/image_raw" />
         <arg name="camera_info_topic" default="/realsense_left/color/camera_info" />
@@ -41,7 +41,7 @@
         <arg name="marker_size" value="$(arg marker_size)" />
         <arg name="marker_separation" value="$(arg marker_separation)" />
         <arg name="show_visualization" default="true" />
-    </include>
+    </include> -->
 
     <!-- 发布 handeye TF（gripper -> camera） -->
     <node pkg="cam_calibration" type="tf_publisher.py" name="handeye_tf_publisher" output="screen">
