@@ -1,6 +1,9 @@
 /data/*
 !/data/.gitkeep
 
+maps/*
+!maps/.gitkeep
+
 # ==============================
 # Python bytecode & cache
 # ==============================
