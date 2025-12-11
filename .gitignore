@@ -1,8 +1,8 @@
 /data/*
 !/data/.gitkeep
 
-maps/*
-!maps/.gitkeep
+/robot_side/piper_reachable_region/maps/*
+!/robot_side/piper_reachable_region/maps/.gitkeep
 
 # ==============================
 # Python bytecode & cache
