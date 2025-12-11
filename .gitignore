@@ -1,3 +1,11 @@
-# data/
-*.pyc
+/data/*
+!/data/.gitkeep
+
+# ==============================
+# Python bytecode & cache
+# ==============================
+
 __pycache__/
+*.py[cod]
+*$py.class
+*.pyc

@@ -213,12 +213,12 @@
             <!-- 深度对齐到彩色，如果后面是用 color 坐标下的 depth（比如点云/检测框投影），建议打开 -->
             <arg name="align_depth" default="true"/>
 
-            <!-- 点云（如果需要，建议先开，调通之后再关） -->
-            <!-- <arg name="enable_pointcloud" default="false"/>
+            <!-- 点云 -->
+            <arg name="enable_pointcloud" default="true"/>
             <arg name="pointcloud_texture_stream" default="RS2_STREAM_COLOR"/>
             <arg name="pointcloud_texture_index" default="0"/>
             <arg name="allow_no_texture_points" default="false"/>
-            <arg name="ordered_pc" default="false"/> -->
+            <arg name="ordered_pc" default="false"/>
 
             <!-- 深度后处理滤波：孔洞填补、降噪等（按需可以慢慢加/减） -->
             <!-- 可选组合：decimation,spatial,temporal,hole_filling -->
