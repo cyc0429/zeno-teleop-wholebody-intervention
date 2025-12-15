@@ -10,7 +10,8 @@
 
     <param name="robot_description" textfile="$(find piper_description)/urdf/piper_description.urdf" />
     <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" >
-        <rosparam param="source_list">[/robot/arm_left/joint_states_single]</rosparam>
+        <!-- <rosparam param="source_list">[/robot/arm_left/joint_states_single]</rosparam> -->
+        <remap from="joint_states" to="/robot/arm_left/joint_states_single"/>
     </node>
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find cam_calibration)/rviz/default.rviz" />
