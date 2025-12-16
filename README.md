@@ -126,7 +126,7 @@ After setup, launch all robot nodes in a single command:
 
 ```bash
 source devel/setup.bash
-roslaunch robot_setup start_robot_all.launch ranger_can_port:=can0 left_can_port:=can_left right_can_port:=can_right enable_ranger:=true enable_paddle2ranger:=true enable_dual_arm:=true enable_cameras:=true enable_rviz:=true enable_gravity_compensation:=true enable_lidar:=true camera_left_usb_port:=2-1 camera_right_usb_port:=2-8 camera_top_usb_port:=2-2
+roslaunch robot_setup start_robot_all.launch ranger_can_port:=can0 left_can_port:=can_left right_can_port:=can_right enable_ranger:=true enable_paddle2ranger:=true enable_dual_arm:=true enable_cameras:=true enable_gravity_compensation:=true enable_lidar:=true enable_rviz:=true use_default_rviz:=false enable_handeye_tf:=true camera_left_usb_port:=2-1 camera_right_usb_port:=2-8 camera_top_usb_port:=2-2
 ```
 
 ```bash
