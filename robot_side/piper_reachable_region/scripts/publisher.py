@@ -31,9 +31,10 @@ class ReachabilityVisualizer:
     ROS node class for visualizing reachability maps from HDF5 files.
     """
 
-    def __init__(self, hdf5_path, frame_id="base_footprint", min_score=None, max_score=None, downsample_factor=1):
+    def __init__(self, hdf5_path, frame_id="base_footprint", reachability_pub_topic="/reachability_cloud", min_score=None, max_score=None, downsample_factor=1):
         self.frame_id = frame_id
         self.downsample_factor = downsample_factor
+        self.reachability_pub_topic = reachability_pub_topic
 
         # Load data from HDF5 file
         try:
@@ -89,7 +90,7 @@ class ReachabilityVisualizer:
             sys.exit(1)
 
         # Initialize publisher
-        self.cloud_pub = rospy.Publisher("/reachability_cloud", PointCloud2, queue_size=1)
+        self.cloud_pub = rospy.Publisher(self.reachability_pub_topic, PointCloud2, queue_size=1)
         self.seq = 0
 
     def create_point_cloud_msg(self):
@@ -150,12 +151,14 @@ def main():
     min_score = rospy.get_param("~min_score", None)
     max_score = rospy.get_param("~max_score", None)
     downsample_factor = int(rospy.get_param("~downsample_factor", 1))
+    reachability_pub_topic = rospy.get_param("~reachability_pub_topic", "/reachability_cloud")
 
     rospy.loginfo(f"Settings: file={hdf5_path}, frame={frame_id}, rate={publish_rate}")
 
     visualizer = ReachabilityVisualizer(
         hdf5_path=hdf5_path,
         frame_id=frame_id,
+        reachability_pub_topic=reachability_pub_topic,
         min_score=min_score,
         max_score=max_score,
         downsample_factor=downsample_factor

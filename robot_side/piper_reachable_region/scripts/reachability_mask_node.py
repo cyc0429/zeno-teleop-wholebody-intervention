@@ -404,8 +404,8 @@ class ReachabilityMaskNode:
                 masked_p_reach = p_reach[mask] if self.use_soft_masking or len(masked_points) > 0 else np.array([])
                 masked_m_pred = m_pred[mask] if m_pred is not None and len(masked_points) > 0 else None
 
-            print(f"masked_points: {masked_points.shape}")
-            print(f"raw points: {points.shape}")
+            # print(f"masked_points: {masked_points.shape}")
+            # print(f"raw points: {points.shape}")
             
             # Publish result
             if len(masked_points) > 0:
