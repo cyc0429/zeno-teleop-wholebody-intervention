@@ -29,7 +29,6 @@ class HandEyeCalibrator:
 
         self.target_pose_topic = rospy.get_param("~target_pose_topic", "/handeye/left_cam_from_target")
         self.top_target_pose_topic = rospy.get_param("~top_target_pose_topic", "/handeye/top_cam_from_target")
-        self.result_pose_topic = rospy.get_param("~result_pose_topic", "/handeye/cam_to_end")
         self.joint_cmd_topic = rospy.get_param("~joint_cmd_topic", "/robot/arm_left/joint_pos_cmd")
 
         # 最小采样数量
@@ -42,9 +41,12 @@ class HandEyeCalibrator:
         self.trajectory_file = rospy.get_param("~trajectory_file", "")  # 轨迹文件路径
 
         # 获取package路径
+        direction = rospy.get_param("~direction", "left")
+        if direction not in ["left", "right"]:
+            raise ValueError(f"Invalid direction: {direction}")
         rospack = rospkg.RosPack()
         self.package_path = rospack.get_path("cam_calibration")
-        self.samples_dir = os.path.join(self.package_path, "data", "samples")
+        self.samples_dir = os.path.join(self.package_path, "data", "samples", direction)
         os.makedirs(self.samples_dir, exist_ok=True)
 
         # 数据存储
@@ -76,7 +78,6 @@ class HandEyeCalibrator:
         self.current_trajectory_file: Optional[str] = None
 
         # Publisher
-        self.result_pub = rospy.Publisher(self.result_pose_topic, PoseStamped, queue_size=1)
         self.joint_cmd_pub = rospy.Publisher(self.joint_cmd_topic, JointState, queue_size=1)
 
         # Subscribers
@@ -102,7 +103,6 @@ class HandEyeCalibrator:
         rospy.loginfo(f"  End pose topic: {self.end_pose_topic}")
         rospy.loginfo(f"  Target pose topic: {self.target_pose_topic}")
         rospy.loginfo(f"  Top target pose topic: {self.top_target_pose_topic}")
-        rospy.loginfo(f"  Result pose topic: {self.result_pose_topic}")
         rospy.loginfo(f"  Joint cmd topic: {self.joint_cmd_topic}")
         rospy.loginfo(f"  Minimum samples required: {self.min_samples}")
         rospy.loginfo(f"  Samples directory: {self.samples_dir}")
@@ -130,12 +130,26 @@ class HandEyeCalibrator:
     def _target_pose_cb(self, msg: PoseStamped) -> None:
         """目标位姿回调 (left2target，对应 left_cam_from_target)"""
         with self.lock:
-            self.target_pose = msg
+            # Check if pose contains infinity values (indicating no target detected)
+            p = msg.pose.position
+            o = msg.pose.orientation
+            if (p.x == float('inf') or p.y == float('inf') or p.z == float('inf') or
+                o.x == float('inf') or o.y == float('inf') or o.z == float('inf') or o.w == float('inf')):
+                self.target_pose = None
+            else:
+                self.target_pose = msg
 
     def _top_target_pose_cb(self, msg: PoseStamped) -> None:
         """顶摄相机位姿回调 (top2target，对应 top_cam_from_target)"""
         with self.lock:
-            self.top_target_pose = msg
+            # Check if pose contains infinity values (indicating no target detected)
+            p = msg.pose.position
+            o = msg.pose.orientation
+            if (p.x == float('inf') or p.y == float('inf') or p.z == float('inf') or
+                o.x == float('inf') or o.y == float('inf') or o.z == float('inf') or o.w == float('inf')):
+                self.top_target_pose = None
+            else:
+                self.top_target_pose = msg
 
     def _quat_to_matrix(self, quat: np.ndarray) -> np.ndarray:
         """四元数转旋转矩阵 (兼容旧版 scipy)"""
@@ -341,9 +355,6 @@ class HandEyeCalibrator:
                         f"  Rotation (rx, ry, rz): [{y_euler[0]:.2f}, {y_euler[1]:.2f}, {y_euler[2]:.2f}] deg"
                     )
                 rospy.loginfo("=" * 50)
-
-                # 发布结果
-                self.result_pub.publish(self.calib_result)
 
                 return TriggerResponse(
                     success=True,
@@ -626,11 +637,6 @@ class HandEyeCalibrator:
         rate = rospy.Rate(10)  # 10 Hz
 
         while not rospy.is_shutdown():
-            # 如果有标定结果，持续发布
-            if self.calib_result is not None:
-                self.calib_result.header.stamp = rospy.Time.now()
-                self.result_pub.publish(self.calib_result)
-
             # 打印状态
             with self.lock:
                 has_joint = self.joint_states is not None

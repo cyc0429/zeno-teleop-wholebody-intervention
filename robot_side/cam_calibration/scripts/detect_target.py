@@ -13,6 +13,9 @@ from geometry_msgs.msg import PoseStamped
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import CameraInfo, Image
 
+# cv2.setLogLevel(cv2.utils.logging.LOG_LEVEL_WARNING)
+cv2.setLogLevel(2)
+
 
 class TargetDetector:
     ARUCO_DICT_MAP = {
@@ -109,27 +112,29 @@ class TargetDetector:
             return
 
         pose_result = self._detect_board(image, msg.header.stamp)
-        if pose_result is not None:
-            self.last_pose = pose_result
-            self.pose_pub.publish(pose_result)
+        self.pose_pub.publish(pose_result)
 
-    def _detect_board(self, image: np.ndarray, stamp: rospy.Time) -> Optional[PoseStamped]:
+        # Only update last_pose for valid detections (not inf poses)
+        if not (pose_result.pose.position.x == float('inf')):
+            self.last_pose = pose_result
+
+    def _detect_board(self, image: np.ndarray, stamp: rospy.Time) -> PoseStamped:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         corners, ids, _ = self.aruco_detector.detectMarkers(gray)
 
         if ids is None or len(ids) == 0:
             self._draw_visualization(image, None, None)
-            return None
+            return self._create_inf_pose(stamp)
 
         obj_points, img_points = self.grid_board.matchImagePoints(corners, ids)
         if obj_points is None or len(obj_points) == 0:
             self._draw_visualization(image, corners, ids)
-            return None
+            return self._create_inf_pose(stamp)
 
         success, rvec, tvec = cv2.solvePnP(obj_points, img_points, self.camera_matrix, self.dist_coeffs)
         if not success:
             self._draw_visualization(image, corners, ids)
-            return None
+            return self._create_inf_pose(stamp)
 
         self._draw_visualization(image, corners, ids, rvec, tvec)
         return self._to_pose_stamped(rvec, tvec, stamp)
@@ -145,6 +150,24 @@ class TargetDetector:
         quat = Rotation.from_rotvec(rvec.flatten()).as_quat()
         pose.pose.orientation.x, pose.pose.orientation.y = quat[0], quat[1]
         pose.pose.orientation.z, pose.pose.orientation.w = quat[2], quat[3]
+
+        return pose
+
+    def _create_inf_pose(self, stamp: rospy.Time) -> PoseStamped:
+        pose = PoseStamped()
+        pose.header.stamp = stamp
+        pose.header.frame_id = self.camera_frame_id
+
+        # Fill position with infinity
+        pose.pose.position.x = float('inf')
+        pose.pose.position.y = float('inf')
+        pose.pose.position.z = float('inf')
+
+        # Fill orientation with infinity (quaternion)
+        pose.pose.orientation.x = float('inf')
+        pose.pose.orientation.y = float('inf')
+        pose.pose.orientation.z = float('inf')
+        pose.pose.orientation.w = float('inf')
 
         return pose
 
