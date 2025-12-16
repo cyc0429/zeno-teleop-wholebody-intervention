@@ -47,7 +47,7 @@ class GripperCamTFPublisher:
         rospack = rospkg.RosPack()
         pkg_path = rospack.get_path("cam_calibration")
         self.samples_dir = rospy.get_param("~samples_dir", os.path.join(pkg_path, "data", "samples", "left"))
-        # 左相机（gripper->left）帧
+        # 相机（gripper->cam）帧
         self.parent_frame = rospy.get_param("~parent_frame", "gripper_base")
         self.child_frame = rospy.get_param("~child_frame", "realsense_left_color_optical_frame")
 
@@ -60,6 +60,10 @@ class GripperCamTFPublisher:
         self.publish_top = rospy.get_param("~publish_top", True)
         self.publish_rate = rospy.get_param("~publish_rate", 30.0)
         self.specific_file = rospy.get_param("~trajectory_file", "")
+
+        # 反向变换参数
+        self.wrist_reverse = rospy.get_param("~wrist_reverse", False)
+        self.top_reverse = rospy.get_param("~top_reverse", False)
 
         os.makedirs(self.samples_dir, exist_ok=True)
 
@@ -91,6 +95,7 @@ class GripperCamTFPublisher:
         t_key: str,
         parent_frame: str,
         child_frame: str,
+        reverse: bool = False,
     ) -> Dict[str, np.ndarray]:
         """从 data 中取出旋转和平移并转换为 TF 所需格式。"""
         if R_key not in data or t_key not in data:
@@ -105,12 +110,19 @@ class GripperCamTFPublisher:
         T = np.eye(4)
         T[:3, :3] = R
         T[:3, 3] = t
+
+        if reverse:
+            # 反向变换：求逆矩阵，并交换父子帧
+            T = np.linalg.inv(T)
+            parent_frame, child_frame = child_frame, parent_frame
+
         quat = quaternion_from_matrix(T)
+        t_new = T[:3, 3]
 
         return {
             "parent": parent_frame,
             "child": child_frame,
-            "translation": t,
+            "translation": t_new,
             "quaternion": quat,
         }
 
@@ -142,14 +154,15 @@ class GripperCamTFPublisher:
                 transforms.append(
                     self._build_transform(
                         data,
-                        "R_gripper2left",
-                        "t_gripper2left",
+                        "R_gripper2cam",
+                        "t_gripper2cam",
                         self.parent_frame,
                         self.child_frame,
+                        self.wrist_reverse,
                     )
                 )
             except Exception as e:
-                rospy.logwarn(f"Failed to load gripper->left transform: {e}")
+                rospy.logwarn(f"Failed to load gripper->cam transform: {e}")
 
         if self.publish_top:
             try:
@@ -160,6 +173,7 @@ class GripperCamTFPublisher:
                         "t_base2top",
                         self.top_parent_frame,
                         self.top_child_frame,
+                        self.top_reverse,
                     )
                 )
             except Exception as e:

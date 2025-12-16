@@ -29,6 +29,7 @@
     <arg name="camera_top_usb_port" default="2-2" />
     <arg name="enable_rviz" default="true" />
     <arg name="use_default_rviz" default="true" />
+    <arg name="enable_handeye_tf" default="true" />
 
     <!-- Setup robot_description for joint_state_publisher_gui if needed -->
     <param name="robot_description" textfile="$(find piper_description)/urdf/piper_description.xacro" />
@@ -244,7 +245,10 @@
         </include>
     </group>
 
-    <include file="$(find cam_calibration)/launch/publish.launch" />
+    <!-- 发布 handeye TF -->
+    <group if="$(arg enable_handeye_tf)">
+        <include file="$(find cam_calibration)/launch/publish.launch" />
+    </group>
 
     <!-- Launch rviz -->
     <group if="$(arg enable_rviz)">

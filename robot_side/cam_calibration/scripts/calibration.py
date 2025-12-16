@@ -59,8 +59,8 @@ class HandEyeCalibrator:
         # 采集的样本数据（统一 xxx2xxx 命名，AfromB 等价于 A2B）
         self.R_base2gripper_samples: List[np.ndarray] = []  # end_pose 提供 base2gripper
         self.t_base2gripper_samples: List[np.ndarray] = []
-        self.R_left2target_samples: List[np.ndarray] = []   # /handeye/left_cam_from_target
-        self.t_left2target_samples: List[np.ndarray] = []
+        self.R_cam2target_samples: List[np.ndarray] = []   # /handeye/left_cam_from_target
+        self.t_cam2target_samples: List[np.ndarray] = []
         self.R_top2target_samples: List[np.ndarray] = []    # /handeye/top_cam_from_target
         self.t_top2target_samples: List[np.ndarray] = []
 
@@ -204,8 +204,8 @@ class HandEyeCalibrator:
                 "joint_poses": [pose.tolist() for pose in self.recorded_joint_poses],
                 "R_base2gripper_samples": [mat.tolist() for mat in self.R_base2gripper_samples],
                 "t_base2gripper_samples": [t.flatten().tolist() for t in self.t_base2gripper_samples],
-                "R_left2target_samples": [mat.tolist() for mat in self.R_left2target_samples],
-                "t_left2target_samples": [t.flatten().tolist() for t in self.t_left2target_samples],
+                "R_cam2target_samples": [mat.tolist() for mat in self.R_cam2target_samples],
+                "t_cam2target_samples": [t.flatten().tolist() for t in self.t_cam2target_samples],
                 "R_top2target_samples": [mat.tolist() for mat in self.R_top2target_samples],
                 "t_top2target_samples": [t.flatten().tolist() for t in self.t_top2target_samples],
                 "calib_result": self._pose_to_dict(self.calib_result),
@@ -277,8 +277,8 @@ class HandEyeCalibrator:
             # 存储样本
             self.R_base2gripper_samples.append(R_base2gripper)
             self.t_base2gripper_samples.append(t_base2gripper)
-            self.R_left2target_samples.append(R_left2target)
-            self.t_left2target_samples.append(t_left2target)
+            self.R_cam2target_samples.append(R_left2target)
+            self.t_cam2target_samples.append(t_left2target)
             self.R_top2target_samples.append(R_top2target)
             self.t_top2target_samples.append(t_top2target)
 
@@ -309,8 +309,8 @@ class HandEyeCalibrator:
                 for R_b2g, t_b2g, R_left2t, t_left2t, R_top2t, t_top2t in zip(
                     self.R_base2gripper_samples,
                     self.t_base2gripper_samples,
-                    self.R_left2target_samples,
-                    self.t_left2target_samples,
+                    self.R_cam2target_samples,
+                    self.t_cam2target_samples,
                     self.R_top2target_samples,
                     self.t_top2target_samples,
                 ):
@@ -370,8 +370,8 @@ class HandEyeCalibrator:
         with self.lock:
             self.R_base2gripper_samples.clear()
             self.t_base2gripper_samples.clear()
-            self.R_left2target_samples.clear()
-            self.t_left2target_samples.clear()
+            self.R_cam2target_samples.clear()
+            self.t_cam2target_samples.clear()
             self.R_top2target_samples.clear()
             self.t_top2target_samples.clear()
             rospy.loginfo("All samples cleared")
@@ -400,8 +400,8 @@ class HandEyeCalibrator:
                     # 同时更新样本数据
                     data['R_base2gripper_samples'] = [mat.tolist() for mat in self.R_base2gripper_samples]
                     data['t_base2gripper_samples'] = [t.flatten().tolist() for t in self.t_base2gripper_samples]
-                    data['R_left2target_samples'] = [mat.tolist() for mat in self.R_left2target_samples]
-                    data['t_left2target_samples'] = [t.flatten().tolist() for t in self.t_left2target_samples]
+                    data['R_cam2target_samples'] = [mat.tolist() for mat in self.R_cam2target_samples]
+                    data['t_cam2target_samples'] = [t.flatten().tolist() for t in self.t_cam2target_samples]
                     data['R_top2target_samples'] = [mat.tolist() for mat in self.R_top2target_samples]
                     data['t_top2target_samples'] = [t.flatten().tolist() for t in self.t_top2target_samples]
                     data['R_base2top'] = (
@@ -554,8 +554,8 @@ class HandEyeCalibrator:
             with self.lock:
                 self.R_base2gripper_samples.clear()
                 self.t_base2gripper_samples.clear()
-                self.R_left2target_samples.clear()
-                self.t_left2target_samples.clear()
+                self.R_cam2target_samples.clear()
+                self.t_cam2target_samples.clear()
                 self.R_top2target_samples.clear()
                 self.t_top2target_samples.clear()
 
