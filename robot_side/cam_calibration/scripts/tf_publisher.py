@@ -46,23 +46,17 @@ class GripperCamTFPublisher:
         # 参数
         rospack = rospkg.RosPack()
         pkg_path = rospack.get_path("cam_calibration")
-        self.samples_dir = rospy.get_param("~samples_dir", os.path.join(pkg_path, "data", "samples"))
+        self.samples_dir = rospy.get_param("~samples_dir", os.path.join(pkg_path, "data", "samples", "left"))
         # 左相机（gripper->left）帧
-        self.left_parent_frame = rospy.get_param(
-            "~left_parent_frame",
-            rospy.get_param("~parent_frame", "gripper_base"),
-        )
-        self.left_child_frame = rospy.get_param(
-            "~left_child_frame",
-            rospy.get_param("~child_frame", "realsense_left_color_optical_frame"),
-        )
+        self.parent_frame = rospy.get_param("~parent_frame", "gripper_base")
+        self.child_frame = rospy.get_param("~child_frame", "realsense_left_color_optical_frame")
 
         # 顶部相机（base->top）帧
         self.top_parent_frame = rospy.get_param("~top_parent_frame", "base_link")
         self.top_child_frame = rospy.get_param("~top_child_frame", "realsense_top_color_optical_frame")
 
         # 可开关
-        self.publish_left = rospy.get_param("~publish_left", True)
+        self.publish_wrist = rospy.get_param("~publish_wrist", True)
         self.publish_top = rospy.get_param("~publish_top", True)
         self.publish_rate = rospy.get_param("~publish_rate", 30.0)
         self.specific_file = rospy.get_param("~trajectory_file", "")
@@ -143,15 +137,15 @@ class GripperCamTFPublisher:
 
         transforms: List[Dict[str, np.ndarray]] = []
 
-        if self.publish_left:
+        if self.publish_wrist:
             try:
                 transforms.append(
                     self._build_transform(
                         data,
                         "R_gripper2left",
                         "t_gripper2left",
-                        self.left_parent_frame,
-                        self.left_child_frame,
+                        self.parent_frame,
+                        self.child_frame,
                     )
                 )
             except Exception as e:
