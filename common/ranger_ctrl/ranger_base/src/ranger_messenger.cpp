@@ -595,7 +595,7 @@ namespace westonrobot {
         l = robot_params_.wheelbase;
         w = robot_params_.track;
         phi_i = atan((l / 2) / (radius - w / 2));
-        ROS_INFO("command linear: %f, steering_angle: %f", linear, k * phi_i);
+        // ROS_INFO("command linear: %f, steering_angle: %f", linear, k * phi_i);
         return k * phi_i;
     }
 
