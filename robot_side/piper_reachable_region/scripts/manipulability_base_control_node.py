@@ -62,6 +62,7 @@ class ManipulabilityBaseControlNode:
         self.base_vel_topic = rospy.get_param('~base_vel_topic', '/robot/intent_vel')
         self.max_linear_vel = rospy.get_param('~max_linear_vel', 0.3)
         self.max_angular_vel = rospy.get_param('~max_angular_vel', 0.5)
+        self.stretch_radius = rospy.get_param('~stretch_radius', 0.3)  # Minimum distance from base to consider arm stretched
         device_str = rospy.get_param('~device', 'cpu')
         
         # End-effector link names
@@ -76,6 +77,7 @@ class ManipulabilityBaseControlNode:
         rospy.loginfo(f"Base velocity topic: {self.base_vel_topic}")
         rospy.loginfo(f"Max linear velocity: {self.max_linear_vel} m/s")
         rospy.loginfo(f"Max angular velocity: {self.max_angular_vel} rad/s")
+        rospy.loginfo(f"Stretch radius threshold: {self.stretch_radius} m")
         
         # Setup device
         if device_str == 'auto':
@@ -293,9 +295,28 @@ class ManipulabilityBaseControlNode:
             rospy.logwarn(f"Failed to compute manipulability from model: {e}")
             return 0.0
     
-    def compute_intent_direction(self, ee_pos_left, ee_pos_right, manip_left, manip_right):
+    def is_arm_stretched(self, ee_pos):
         """
-        Compute composed intent direction from both end-effector positions using weighted sum.
+        Check if an arm is stretched out based on distance from base.
+        
+        An arm is considered "stretched out" if its end-effector is beyond
+        a certain radius from the base (origin).
+        
+        Args:
+            ee_pos: (3,) array of end-effector position [x, y, z] in base frame
+            
+        Returns:
+            bool: True if arm is stretched out, False otherwise
+        """
+        # Compute distance from base (origin) to end-effector
+        distance = np.linalg.norm(ee_pos)
+        return distance > self.stretch_radius
+    
+    def compute_intent_direction(self, ee_pos_left, ee_pos_right, manip_left, manip_right, 
+                                 left_stretched, right_stretched):
+        """
+        Compute composed intent direction from end-effector positions using weighted sum.
+        Only considers arms that are stretched out.
         
         The intent direction is computed as a weighted sum of the end-effector positions,
         where weights are inversely proportional to manipulability (lower manipulability
@@ -307,15 +328,23 @@ class ManipulabilityBaseControlNode:
             ee_pos_right: (3,) array of right end-effector position
             manip_left: manipulability of left arm
             manip_right: manipulability of right arm
+            left_stretched: bool, whether left arm is stretched out
+            right_stretched: bool, whether right arm is stretched out
             
         Returns:
             intent_dir: (2,) array of intent direction [x, y] in base frame (normalized)
+                       Returns [0, 0] if no arms are stretched out
         """
+        # Only consider stretched-out arms
+        if not left_stretched and not right_stretched:
+            # No arms stretched out, return zero direction
+            return np.array([0.0, 0.0])
+        
         # Compute manipulability deficits (how far below threshold)
         # Use a small epsilon to avoid division by zero
         epsilon = 1e-6
-        manip_deficit_left = max(epsilon, self.manip_threshold - manip_left)
-        manip_deficit_right = max(epsilon, self.manip_threshold - manip_right)
+        manip_deficit_left = max(epsilon, self.manip_threshold - manip_left) if left_stretched else 0.0
+        manip_deficit_right = max(epsilon, self.manip_threshold - manip_right) if right_stretched else 0.0
         
         # Compute weights: higher deficit = higher weight
         # Weights are proportional to manipulability deficit
@@ -329,8 +358,15 @@ class ManipulabilityBaseControlNode:
             weight_right = weight_right / total_weight
         else:
             # Fallback to equal weights if both are at threshold
-            weight_left = 0.5
-            weight_right = 0.5
+            if left_stretched and right_stretched:
+                weight_left = 0.5
+                weight_right = 0.5
+            elif left_stretched:
+                weight_left = 1.0
+                weight_right = 0.0
+            else:  # right_stretched
+                weight_left = 0.0
+                weight_right = 1.0
         
         # Compute weighted average end-effector position
         ee_pos_weighted = weight_left * ee_pos_left + weight_right * ee_pos_right
@@ -410,28 +446,58 @@ class ManipulabilityBaseControlNode:
             if ee_pos_left is None or ee_pos_right is None:
                 return
             
-            # Compute manipulability from model
-            manip_left = self.compute_manipulability_from_model(ee_pos_left)
-            manip_right = self.compute_manipulability_from_model(ee_pos_right)
+            # Check if arms are stretched out (sphere check)
+            left_stretched = self.is_arm_stretched(ee_pos_left)
+            right_stretched = self.is_arm_stretched(ee_pos_right)
             
-            rospy.logdebug(f"Manipulability - Left: {manip_left:.4f}, Right: {manip_right:.4f}")
+            rospy.logdebug(f"Arm stretch status - Left: {left_stretched} (dist: {np.linalg.norm(ee_pos_left):.3f}), Right: {right_stretched} (dist: {np.linalg.norm(ee_pos_right):.3f})")
+            
+            # Only proceed if at least one arm is stretched out
+            if not (left_stretched or right_stretched):
+                # No arms stretched out, publish zero velocity
+                cmd_vel = Twist()
+                self.cmd_vel_pub.publish(cmd_vel)
+                rospy.logdebug("No arms stretched out, publishing zero velocity")
+                return
+            
+            # Compute manipulability from model (only for stretched-out arms)
+            manip_left = self.compute_manipulability_from_model(ee_pos_left) if left_stretched else self.manip_threshold
+            manip_right = self.compute_manipulability_from_model(ee_pos_right) if right_stretched else self.manip_threshold
+            
+            rospy.logdebug(f"Manipulability - Left: {manip_left:.4f} (stretched: {left_stretched}), Right: {manip_right:.4f} (stretched: {right_stretched})")
+            
+            # Compute average manipulability only for stretched-out arms
+            if left_stretched and right_stretched:
+                avg_manip = (manip_left + manip_right) / 2.0
+            elif left_stretched:
+                avg_manip = manip_left
+            else:  # right_stretched
+                avg_manip = manip_right
             
             # Check if manipulability is below threshold
-            avg_manip = (manip_left + manip_right) / 2.0
             if avg_manip < self.manip_threshold:
-                # Compute intent direction (weighted by manipulability)
-                intent_dir = self.compute_intent_direction(ee_pos_left, ee_pos_right, manip_left, manip_right)
-                
-                # Map to base velocity command
-                cmd_vel = self.map_intent_to_base_vel(intent_dir, manip_left, manip_right)
-                
-                # Publish base velocity command
-                self.cmd_vel_pub.publish(cmd_vel)
-                
-                rospy.logdebug(
-                    f"Low manipulability ({avg_manip:.4f} < {self.manip_threshold}). "
-                    f"Publishing base vel: linear.x={cmd_vel.linear.x:.3f}, linear.y={cmd_vel.linear.y:.3f}"
+                # Compute intent direction (weighted by manipulability, only considering stretched arms)
+                intent_dir = self.compute_intent_direction(
+                    ee_pos_left, ee_pos_right, manip_left, manip_right,
+                    left_stretched, right_stretched
                 )
+                
+                # Only publish if intent direction is non-zero
+                if np.linalg.norm(intent_dir) > 1e-6:
+                    # Map to base velocity command
+                    cmd_vel = self.map_intent_to_base_vel(intent_dir, manip_left, manip_right)
+                    
+                    # Publish base velocity command
+                    self.cmd_vel_pub.publish(cmd_vel)
+                    
+                    rospy.logdebug(
+                        f"Low manipulability ({avg_manip:.4f} < {self.manip_threshold}). "
+                        f"Publishing base vel: linear.x={cmd_vel.linear.x:.3f}, linear.y={cmd_vel.linear.y:.3f}"
+                    )
+                else:
+                    # Zero intent direction, publish zero velocity
+                    cmd_vel = Twist()
+                    self.cmd_vel_pub.publish(cmd_vel)
             else:
                 # Publish zero velocity when manipulability is sufficient
                 cmd_vel = Twist()
