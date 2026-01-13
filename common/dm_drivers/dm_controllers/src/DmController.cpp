@@ -127,7 +127,7 @@ namespace damiao
 		if (motor_index_map_.find(x_params_.motor_name) != motor_index_map_.end())
 		{
 			size_t x_idx = motor_index_map_[x_params_.motor_name];
-			double kp_x = x_params_.kp_default + std::abs(repulsive_x);
+			double kp_x = x_params_.kp_default + 0.0 * std::abs(repulsive_x);
 			double pos_des_x = 0.0;
 			double kd_x = x_params_.kd_default;
 			
@@ -152,7 +152,7 @@ namespace damiao
 		if (motor_index_map_.find(y_params_.motor_name) != motor_index_map_.end())
 		{
 			size_t y_idx = motor_index_map_[y_params_.motor_name];
-			double kp_y = y_params_.kp_default + std::abs(repulsive_y);
+			double kp_y = y_params_.kp_default + 0.0 * std::abs(repulsive_y);
 			double pos_des_y = 0.0;
 			double kd_y = y_params_.kd_default;
 			

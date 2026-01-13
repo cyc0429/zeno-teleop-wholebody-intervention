@@ -67,9 +67,9 @@ namespace damiao
 		const double cycle_time_error = (elapsedTime_ - ros::Duration(desiredDuration.count())).toSec();
 		if (cycle_time_error > cycleTimeErrorThreshold_)
 		{
-			ROS_WARN_STREAM("Cycle time exceeded error threshold by: " << cycle_time_error - cycleTimeErrorThreshold_ << "s, "
-																	   << "cycle time: " << elapsedTime_ << "s, "
-																	   << "threshold: " << cycleTimeErrorThreshold_ << "s");
+			// ROS_WARN_STREAM("Cycle time exceeded error threshold by: " << cycle_time_error - cycleTimeErrorThreshold_ << "s, "
+			// 														   << "cycle time: " << elapsedTime_ << "s, "
+			// 														   << "threshold: " << cycleTimeErrorThreshold_ << "s");
 		}
 
 		// std::cerr << "fuck" << std::endl;

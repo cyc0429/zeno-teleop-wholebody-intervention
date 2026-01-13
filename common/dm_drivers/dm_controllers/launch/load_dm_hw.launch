@@ -6,8 +6,8 @@
     <rosparam file="$(find dm_hw)/config/dm_loop.yaml" command="load" ns="damiao" />
     <rosparam file="$(arg haptic_config)" command="load" ns="controllers/dm_controller" />
 
-    <node name="dm_main" pkg="dm_main" type="dm_main" respawn="false"
-        clear_params="true" />
+    <!-- <node name="dm_main" pkg="dm_main" type="dm_main" respawn="false" clear_params="true" /> -->
+    <node name="dm_main" pkg="dm_main" type="dm_main" respawn="false" />
 
     <rosparam file="$(find dm_controllers)/config/controllers.yaml" command="load" />
     <node name="controller_loader" pkg="controller_manager" type="spawner" output="screen"
