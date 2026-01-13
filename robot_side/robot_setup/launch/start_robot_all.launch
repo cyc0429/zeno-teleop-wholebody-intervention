@@ -34,7 +34,7 @@
     <arg name="enable_handeye_tf" default="true" />
 
     <arg name="enable_lidar" default="true" />
-    <arg name="lidar_port" default="/dev/ttyUSB1" />
+    <arg name="enable_reachability" default="true" />
 
     <!-- Setup robot_description for joint_state_publisher_gui if needed -->
     <param name="robot_description" textfile="$(find piper_description)/urdf/piper_description.xacro" />
@@ -273,8 +273,11 @@
 
     <group if="$(arg enable_lidar)">
         <include file="$(find rplidar_ros)/launch/rplidar_c1.launch">
-            <arg name="serial_port" value="$(arg lidar_port)" />
-            <arg name="frame_id" value="arm_left/base_link"/>
+        </include>
+    </group>
+
+    <group if="$(arg enable_reachability)">
+        <include file="$(find piper_reachable_region)/launch/reachability_mask.launch">
         </include>
     </group>
 </launch>

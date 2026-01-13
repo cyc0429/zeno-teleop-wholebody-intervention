@@ -402,8 +402,9 @@ class ManipulabilityBaseControlNode:
         
         # Scale velocity based on how far below threshold we are
         # More aggressive control when manipulability is very low
-        manip_deficit = max(0.0, self.manip_threshold - avg_manip)
-        scale_factor = min(1.0, manip_deficit / self.manip_threshold)
+        # manip_deficit = max(0.0, self.manip_threshold - avg_manip)
+        # scale_factor = min(1.0, manip_deficit / (self.manip_threshold - 0.01))
+        scale_factor = 1.0
         
         # Map intent direction to base velocities
         # x direction: forward/backward
@@ -464,7 +465,7 @@ class ManipulabilityBaseControlNode:
             manip_left = self.compute_manipulability_from_model(ee_pos_left) if left_stretched else self.manip_threshold
             manip_right = self.compute_manipulability_from_model(ee_pos_right) if right_stretched else self.manip_threshold
             
-            rospy.logdebug(f"Manipulability - Left: {manip_left:.4f} (stretched: {left_stretched}), Right: {manip_right:.4f} (stretched: {right_stretched})")
+            rospy.loginfo(f"Manipulability - Left: {manip_left:.4f} (stretched: {left_stretched}), Right: {manip_right:.4f} (stretched: {right_stretched})")
             
             # Compute average manipulability only for stretched-out arms
             if left_stretched and right_stretched:

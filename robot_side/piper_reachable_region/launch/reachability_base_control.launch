@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<!--
+MLP-based Reachability Mask Node Launch File
+
+This launch file starts the reachability-aware point cloud masking node.
+
+Usage:
+  roslaunch piper_reachable_region reachability_mask.launch \
+    model_path:=/path/to/model.pth \
+    config_path:=/path/to/config.json \
+    input_cloud_topic:=/camera/depth/points
+
+Parameters (with defaults):
+  - model_path: Path to trained PyTorch model (model.pth)
+  - config_path: Path to model configuration (config.json)
+  - input_cloud_topic: Input PointCloud2 topic (default: /env_cloud)
+  - output_cloud_topic: Output masked cloud topic (default: /reachable_cloud)
+  - target_frame: Robot base frame (default: base_link)
+  - p_reach_threshold: Reachability probability threshold (default: 0.5)
+  - min_manip: Minimum manipulability threshold (default: 0.0)
+  - use_soft_masking: Use soft masking instead of hard masking (default: false)
+  - device: PyTorch device, 'cpu' or 'cuda' (default: cpu)
+-->
+
+<launch>
+     <!-- Arguments with defaults -->
+     <arg name="model_path" default="$(find piper_reachable_region)/model/model.pth" doc="Path to trained model.pth file" />
+     <arg name="config_path" default="$(find piper_reachable_region)/model/config.json" doc="Path to config.json file" />
+     <arg name="urdf_path" default="$(find piper_description)/urdf/piper_description.urdf" doc="Path to urdf file" />
+     <arg name="manip_threshold" default="0.14" />
+     <arg name="base_vel_topic" default="/robot/intent_vel" />
+     <arg name="max_linear_vel" default="0.15" />
+     <arg name="stretch_radius" default="0.6" />
+     <arg name="device" default="cuda" />
+     <arg name="log_level" default="debug" doc="ROS node log level: debug, info, warn, error, fatal" />
+
+     <!-- Reachability Mask Node -->
+     <node pkg="piper_reachable_region" type="manipulability_base_control_node.py" name="reachability_base_ctrl_node" respawn="true" output="screen">
+
+          <!-- Model and Configuration -->
+          <param name="model_path" value="$(arg model_path)" />
+          <param name="config_path" value="$(arg config_path)" />
+
+          <param name="urdf_path" value="$(arg urdf_path)" />
+          <param name="manip_threshold" value="$(arg manip_threshold)" />
+          <param name="base_vel_topic" value="$(arg base_vel_topic)" />
+          <param name="max_linear_vel" value="$(arg max_linear_vel)" />
+          <param name="stretch_radius" value="$(arg stretch_radius)" />
+          
+          <!-- Device Configuration -->
+          <param name="device" value="$(arg device)" />
+
+          <!-- Logging -->
+          <env name="ROSCONSOLE_FORMAT" value="[${severity}] [${node}]: ${message}" />
+     </node>
+
+</launch>
