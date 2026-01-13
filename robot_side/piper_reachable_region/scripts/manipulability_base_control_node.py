@@ -383,37 +383,46 @@ class ManipulabilityBaseControlNode:
         
         return intent_dir_xy
     
-    def map_intent_to_base_vel(self, intent_dir, manip_left, manip_right):
+    def compute_single_arm_base_vel(self, ee_pos, manipulability, is_stretched):
         """
-        Map intent direction to base velocity command.
+        Compute base velocity command for a single arm based on its end-effector position and manipulability.
         
         Args:
-            intent_dir: (2,) array of intent direction [x, y]
-            manip_left: manipulability of left arm
-            manip_right: manipulability of right arm
+            ee_pos: (3,) array of end-effector position [x, y, z] in base frame
+            manipulability: manipulability score for this arm
+            is_stretched: bool, whether this arm is stretched out
             
         Returns:
-            cmd_vel: Twist message with base velocity command
+            cmd_vel: Twist message with base velocity command for this arm
         """
         cmd_vel = Twist()
         
-        # Compute average manipulability
-        avg_manip = (manip_left + manip_right) / 2.0
+        # If arm is not stretched or manipulability is above threshold, return zero velocity
+        if not is_stretched or manipulability >= self.manip_threshold:
+            return cmd_vel
         
-        # Scale velocity based on how far below threshold we are
+        # Compute intent direction: direction from base to end-effector (projected to xy plane)
+        intent_dir_xy = ee_pos[:2]
+        
+        # Normalize direction
+        norm = np.linalg.norm(intent_dir_xy)
+        if norm > 1e-6:
+            intent_dir_xy = intent_dir_xy / norm
+        else:
+            # End-effector is at origin or very close, return zero velocity
+            return cmd_vel
+        
+        # Scale velocity based on manipulability deficit
         # More aggressive control when manipulability is very low
-        # manip_deficit = max(0.0, self.manip_threshold - avg_manip)
-        # scale_factor = min(1.0, manip_deficit / (self.manip_threshold - 0.01))
+        manip_deficit = self.manip_threshold - manipulability
+        scale_factor = min(1.0, manip_deficit / self.manip_threshold)
         scale_factor = 1.0
         
         # Map intent direction to base velocities
         # x direction: forward/backward
         # y direction: left/right (lateral)
-        # For mobile base: typically cmd_vel.linear.x is forward, cmd_vel.linear.y is lateral
-        
-        # Scale by max velocity and deficit
-        linear_vel_x = intent_dir[0] * self.max_linear_vel * scale_factor
-        linear_vel_y = intent_dir[1] * self.max_linear_vel * scale_factor
+        linear_vel_x = intent_dir_xy[0] * self.max_linear_vel * scale_factor
+        linear_vel_y = intent_dir_xy[1] * self.max_linear_vel * scale_factor
         
         # Clamp to max velocities
         linear_vel_x = np.clip(linear_vel_x, -self.max_linear_vel, self.max_linear_vel)
@@ -424,9 +433,36 @@ class ManipulabilityBaseControlNode:
         cmd_vel.linear.z = 0.0
         cmd_vel.angular.x = 0.0
         cmd_vel.angular.y = 0.0
-        cmd_vel.angular.z = 0.0  # No rotation for now, can be added if needed
+        cmd_vel.angular.z = 0.0
         
         return cmd_vel
+    
+    def average_twist_commands(self, twist1, twist2):
+        """
+        Compute average of two Twist commands.
+        
+        Args:
+            twist1: First Twist message
+            twist2: Second Twist message
+            
+        Returns:
+            avg_twist: Twist message with averaged values
+        """
+        
+        if twist1.linear.x == 0 and twist1.linear.y == 0 and (twist2.linear.x != 0 or twist2.linear.y != 0):
+            return twist2
+        
+        if twist2.linear.x == 0 and twist2.linear.y == 0 and (twist1.linear.x != 0 or twist1.linear.y != 0):
+            return twist1
+        
+        avg_twist = Twist()
+        avg_twist.linear.x = (twist1.linear.x + twist2.linear.x) / 2.0
+        avg_twist.linear.y = (twist1.linear.y + twist2.linear.y) / 2.0
+        avg_twist.linear.z = (twist1.linear.z + twist2.linear.z) / 2.0
+        avg_twist.angular.x = (twist1.angular.x + twist2.angular.x) / 2.0
+        avg_twist.angular.y = (twist1.angular.y + twist2.angular.y) / 2.0
+        avg_twist.angular.z = (twist1.angular.z + twist2.angular.z) / 2.0
+        return avg_twist
     
     def compute_and_publish_base_vel(self):
         """
@@ -453,6 +489,12 @@ class ManipulabilityBaseControlNode:
             
             rospy.logdebug(f"Arm stretch status - Left: {left_stretched} (dist: {np.linalg.norm(ee_pos_left):.3f}), Right: {right_stretched} (dist: {np.linalg.norm(ee_pos_right):.3f})")
             
+            # Compute manipulability from model (only for stretched-out arms)
+            manip_left = self.compute_manipulability_from_model(ee_pos_left) if left_stretched else self.manip_threshold
+            manip_right = self.compute_manipulability_from_model(ee_pos_right) if right_stretched else self.manip_threshold
+            
+            rospy.loginfo(f"Manipulability - Left: {manip_left:.4f} (stretched: {left_stretched}), Right: {manip_right:.4f} (stretched: {right_stretched})")
+            
             # Only proceed if at least one arm is stretched out
             if not (left_stretched or right_stretched):
                 # No arms stretched out, publish zero velocity
@@ -461,48 +503,21 @@ class ManipulabilityBaseControlNode:
                 rospy.logdebug("No arms stretched out, publishing zero velocity")
                 return
             
-            # Compute manipulability from model (only for stretched-out arms)
-            manip_left = self.compute_manipulability_from_model(ee_pos_left) if left_stretched else self.manip_threshold
-            manip_right = self.compute_manipulability_from_model(ee_pos_right) if right_stretched else self.manip_threshold
+            # Compute base velocity for each arm separately
+            base_vel_left = self.compute_single_arm_base_vel(ee_pos_left, manip_left, left_stretched)
+            base_vel_right = self.compute_single_arm_base_vel(ee_pos_right, manip_right, right_stretched)
             
-            rospy.loginfo(f"Manipulability - Left: {manip_left:.4f} (stretched: {left_stretched}), Right: {manip_right:.4f} (stretched: {right_stretched})")
+            # Compute average velocity
+            cmd_vel = self.average_twist_commands(base_vel_left, base_vel_right)
             
-            # Compute average manipulability only for stretched-out arms
-            if left_stretched and right_stretched:
-                avg_manip = (manip_left + manip_right) / 2.0
-            elif left_stretched:
-                avg_manip = manip_left
-            else:  # right_stretched
-                avg_manip = manip_right
+            # Publish averaged base velocity command
+            self.cmd_vel_pub.publish(cmd_vel)
             
-            # Check if manipulability is below threshold
-            if avg_manip < self.manip_threshold:
-                # Compute intent direction (weighted by manipulability, only considering stretched arms)
-                intent_dir = self.compute_intent_direction(
-                    ee_pos_left, ee_pos_right, manip_left, manip_right,
-                    left_stretched, right_stretched
-                )
-                
-                # Only publish if intent direction is non-zero
-                if np.linalg.norm(intent_dir) > 1e-6:
-                    # Map to base velocity command
-                    cmd_vel = self.map_intent_to_base_vel(intent_dir, manip_left, manip_right)
-                    
-                    # Publish base velocity command
-                    self.cmd_vel_pub.publish(cmd_vel)
-                    
-                    rospy.logdebug(
-                        f"Low manipulability ({avg_manip:.4f} < {self.manip_threshold}). "
-                        f"Publishing base vel: linear.x={cmd_vel.linear.x:.3f}, linear.y={cmd_vel.linear.y:.3f}"
-                    )
-                else:
-                    # Zero intent direction, publish zero velocity
-                    cmd_vel = Twist()
-                    self.cmd_vel_pub.publish(cmd_vel)
-            else:
-                # Publish zero velocity when manipulability is sufficient
-                cmd_vel = Twist()
-                self.cmd_vel_pub.publish(cmd_vel)
+            rospy.logdebug(
+                f"Base vel - Left: [x={base_vel_left.linear.x:.3f}, y={base_vel_left.linear.y:.3f}], "
+                f"Right: [x={base_vel_right.linear.x:.3f}, y={base_vel_right.linear.y:.3f}], "
+                f"Avg: [x={cmd_vel.linear.x:.3f}, y={cmd_vel.linear.y:.3f}]"
+            )
                 
         except Exception as e:
             rospy.logerr(f"Error in compute_and_publish_base_vel: {e}")
