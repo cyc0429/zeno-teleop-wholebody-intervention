@@ -184,8 +184,14 @@ namespace westonrobot {
             return;
         }
 
-        auto state = robot_->GetRobotState();
-        auto actuator_state = robot_->GetActuatorState();
+        // Protect concurrent access to robot_ object
+        RangerCoreState state;
+        RangerActuatorState actuator_state;
+        {
+            std::lock_guard<std::mutex> lock(robot_mutex_);
+            state = robot_->GetRobotState();
+            actuator_state = robot_->GetActuatorState();
+        }
 
         // update odometry
         {
@@ -301,7 +307,11 @@ namespace westonrobot {
         // publish BMS state
 
         {
-            auto bms_state = robot_->GetCommonSensorState();
+            RangerCommonSensorState bms_state;
+            {
+                std::lock_guard<std::mutex> lock(robot_mutex_);
+                bms_state = robot_->GetCommonSensorState();
+            }
             ranger_msgs::RangerBmsStatus batt_msg;
             batt_msg.SOC = bms_state.bms_basic_state.battery_soc;
             batt_msg.SOH = bms_state.bms_basic_state.battery_soh;
@@ -467,11 +477,17 @@ namespace westonrobot {
         else if (msg->linear.y != 0) {
             if (msg->linear.x == 0.0 && robot_type_ == RangerSubType::kRangerMiniV1) {
                 motion_mode_ = MotionState::MOTION_MODE_SIDE_SLIP;
-                robot_->SetMotionMode(MotionState::MOTION_MODE_SIDE_SLIP);
+                {
+                    std::lock_guard<std::mutex> lock(robot_mutex_);
+                    robot_->SetMotionMode(MotionState::MOTION_MODE_SIDE_SLIP);
+                }
             }
             else {
                 motion_mode_ = MotionState::MOTION_MODE_PARALLEL;
-                robot_->SetMotionMode(MotionState::MOTION_MODE_PARALLEL);
+                {
+                    std::lock_guard<std::mutex> lock(robot_mutex_);
+                    robot_->SetMotionMode(MotionState::MOTION_MODE_PARALLEL);
+                }
             }
         }
         else {
@@ -479,11 +495,17 @@ namespace westonrobot {
             // Use minimum turn radius to switch between dual ackerman and spinning mode
             if (radius < robot_params_.min_turn_radius) {
                 motion_mode_ = MotionState::MOTION_MODE_SPINNING;
-                robot_->SetMotionMode(MotionState::MOTION_MODE_SPINNING);
+                {
+                    std::lock_guard<std::mutex> lock(robot_mutex_);
+                    robot_->SetMotionMode(MotionState::MOTION_MODE_SPINNING);
+                }
             }
             else {
                 motion_mode_ = MotionState::MOTION_MODE_DUAL_ACKERMAN;
-                robot_->SetMotionMode(MotionState::MOTION_MODE_DUAL_ACKERMAN);
+                {
+                    std::lock_guard<std::mutex> lock(robot_mutex_);
+                    robot_->SetMotionMode(MotionState::MOTION_MODE_DUAL_ACKERMAN);
+                }
             }
         }
 
@@ -496,7 +518,10 @@ namespace westonrobot {
             if (steer_cmd < -robot_params_.max_steer_angle_ackermann) {
                 steer_cmd = -robot_params_.max_steer_angle_ackermann;
             }
-            robot_->SetMotionCommand(msg->linear.x, steer_cmd);
+            {
+                std::lock_guard<std::mutex> lock(robot_mutex_);
+                robot_->SetMotionCommand(msg->linear.x, steer_cmd);
+            }
             break;
         }
         case MotionState::MOTION_MODE_PARALLEL: {
@@ -530,9 +555,12 @@ namespace westonrobot {
             else {
                 vel = msg->linear.x >= 0 ? 1.0 : -1.0;
             }
-            robot_->SetMotionCommand(vel * sqrt(msg->linear.x * msg->linear.x +
-                msg->linear.y * msg->linear.y),
-                steer_cmd);
+            {
+                std::lock_guard<std::mutex> lock(robot_mutex_);
+                robot_->SetMotionCommand(vel * sqrt(msg->linear.x * msg->linear.x +
+                    msg->linear.y * msg->linear.y),
+                    steer_cmd);
+            }
             break;
         }
         case MotionState::MOTION_MODE_SPINNING: {
@@ -543,7 +571,10 @@ namespace westonrobot {
             if (a_v < -robot_params_.max_angular_speed) {
                 a_v = -robot_params_.max_angular_speed;
             }
-            robot_->SetMotionCommand(0.0, 0.0, a_v);
+            {
+                std::lock_guard<std::mutex> lock(robot_mutex_);
+                robot_->SetMotionCommand(0.0, 0.0, a_v);
+            }
             break;
         }
         case MotionState::MOTION_MODE_SIDE_SLIP: {
@@ -554,7 +585,10 @@ namespace westonrobot {
             if (l_v < -robot_params_.max_linear_speed) {
                 l_v = -robot_params_.max_linear_speed;
             }
-            robot_->SetMotionCommand(0.0, 0.0, l_v);
+            {
+                std::lock_guard<std::mutex> lock(robot_mutex_);
+                robot_->SetMotionCommand(0.0, 0.0, l_v);
+            }
             break;
         }
         }
@@ -575,10 +609,16 @@ namespace westonrobot {
                 break;
             }
             }
-            robot_->SetLightCommand(cmd.front_light.mode, 0, cmd.front_light.mode, 0);
+            {
+                std::lock_guard<std::mutex> lock(robot_mutex_);
+                robot_->SetLightCommand(cmd.front_light.mode, 0, cmd.front_light.mode, 0);
+            }
         }
         else {
-            robot_->DisableLightControl();
+            {
+                std::lock_guard<std::mutex> lock(robot_mutex_);
+                robot_->DisableLightControl();
+            }
         }
     }
 
@@ -595,7 +635,7 @@ namespace westonrobot {
         l = robot_params_.wheelbase;
         w = robot_params_.track;
         phi_i = atan((l / 2) / (radius - w / 2));
-        ROS_INFO("command linear: %f, steering_angle: %f", linear, k * phi_i);
+        // ROS_INFO("command linear: %f, steering_angle: %f", linear, k * phi_i);
         return k * phi_i;
     }
 
@@ -603,19 +643,22 @@ namespace westonrobot {
         ranger_msgs::TriggerParkMode::Request& req,
         ranger_msgs::TriggerParkMode::Response& res) {
         // Call to trigger park mode
-        if (req.TriggerParkedMode) {
-            res.isParked = true;
-            robot_->SetMotionCommand(0.0,
-                0.0);  // This functions needs to be invoked before
-            // the parking mode can be triggered
-            robot_->SetMotionMode(MotionState::MOTION_MODE_PARKING);
-        }
-        else {  // Call to release park mode
-            res.isParked = false;
-            robot_->SetMotionMode(MotionState::MOTION_MODE_DUAL_ACKERMAN);
-            robot_->SetMotionCommand(
-                0.0, 0.0);  // Setting the mode to dual Ackerman doesn't return the
-            // wheels to its original position, hence this function.
+        {
+            std::lock_guard<std::mutex> lock(robot_mutex_);
+            if (req.TriggerParkedMode) {
+                res.isParked = true;
+                robot_->SetMotionCommand(0.0,
+                    0.0);  // This functions needs to be invoked before
+                // the parking mode can be triggered
+                robot_->SetMotionMode(MotionState::MOTION_MODE_PARKING);
+            }
+            else {  // Call to release park mode
+                res.isParked = false;
+                robot_->SetMotionMode(MotionState::MOTION_MODE_DUAL_ACKERMAN);
+                robot_->SetMotionCommand(
+                    0.0, 0.0);  // Setting the mode to dual Ackerman doesn't return the
+                // wheels to its original position, hence this function.
+            }
         }
         parking_mode_ = res.isParked;
         return true;

@@ -3,7 +3,7 @@ x:
   max: 0.315
   min: -0.315
   deadzone: 0.02
-  max_vel: 0.5
+  max_vel: 0.25
   reverse_input: true
   lock_output: false
   lock_output_value: 0.0
@@ -13,7 +13,7 @@ y:
   max: 0.315
   min: -0.315
   deadzone: 0.02
-  max_vel: 0.5
+  max_vel: 0.25
   reverse_input: false
   lock_output: false
   lock_output_value: 0.0
@@ -22,7 +22,7 @@ z:
   name: joint0_motor
   max: 0.5
   min: -0.5
-  deadzone: 0.05
+  deadzone: 0.1
   max_vel: 1.0
   reverse_input: false
   lock_output: false

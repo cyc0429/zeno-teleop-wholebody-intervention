@@ -11,6 +11,7 @@
 #define RANGER_MESSENGER_HPP
 
 #include <string>
+#include <mutex>
 
 #include <eigen3/Eigen/Core>
 #include <geometry_msgs/PoseArray.h>
@@ -75,6 +76,9 @@ class RangerROSMessenger {
   std::shared_ptr<RangerRobot> robot_;
   RangerSubType robot_type_;
   RobotParams robot_params_;
+
+  // Mutex to protect concurrent access to robot_ object
+  std::mutex robot_mutex_;
 
   // constants
   const double steer_angle_tolerance_ = 0.005;  // ~+-0.287 degrees

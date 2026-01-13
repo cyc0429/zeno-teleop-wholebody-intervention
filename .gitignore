@@ -3,6 +3,7 @@
 
 /robot_side/piper_reachable_region/maps/*
 !/robot_side/piper_reachable_region/maps/.gitkeep
+!/robot_side/piper_reachable_region/maps/*.h5
 
 # ==============================
 # Python bytecode & cache

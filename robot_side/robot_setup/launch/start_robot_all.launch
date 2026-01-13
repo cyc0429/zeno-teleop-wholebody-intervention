@@ -23,13 +23,18 @@
     <arg name="girpper_exist" default="true" />
 
     <!-- Arguments for cameras -->
-    <arg name="enable_cameras" default="true" />
-    <arg name="camera_left_usb_port" default="2-1" />
-    <arg name="camera_right_usb_port" default="2-8" />
-    <arg name="camera_top_usb_port" default="2-2" />
+    <arg name="enable_camera_left" default="true" />
+    <arg name="enable_camera_right" default="true" />
+    <arg name="enable_camera_top" default="true" />
+    <arg name="camera_left_usb_port" default="2-4.2" />
+    <arg name="camera_right_usb_port" default="2-4.4" />
+    <arg name="camera_top_usb_port" default="2-4.3" />
     <arg name="enable_rviz" default="true" />
-    <arg name="use_default_rviz" default="true" />
+    <arg name="use_default_rviz" default="false" />
     <arg name="enable_handeye_tf" default="true" />
+
+    <arg name="enable_lidar" default="true" />
+    <arg name="lidar_port" default="/dev/ttyUSB1" />
 
     <!-- Setup robot_description for joint_state_publisher_gui if needed -->
     <param name="robot_description" textfile="$(find piper_description)/urdf/piper_description.xacro" />
@@ -62,13 +67,13 @@
     </group>
 
     <!-- Launch cameras -->
-    <group if="$(arg enable_cameras)">
+    <group if="$(arg enable_camera_left)">
         <include file="$(find realsense2_camera)/launch/rs_camera.launch">
             <arg name="camera" value="realsense_left" />
             <arg name="usb_port_id" value="$(arg camera_left_usb_port)" />
 
             <!-- 深度：近距离精度优先，使用 848x480@30 -->
-            <arg name="enable_depth" default="true" />
+            <arg name="enable_depth" default="false" />
             <arg name="depth_width" default="848" />
             <arg name="depth_height" default="480" />
             <arg name="depth_fps" default="30" />
@@ -96,7 +101,7 @@
             <arg name="confidence_fps" default="-1" />
 
             <!-- 点云与深度对齐：腕部相机一般要 RGB-D 配合，建议全部打开 -->
-            <arg name="enable_pointcloud" default="true" />
+            <arg name="enable_pointcloud" default="false" />
             <arg name="pointcloud_texture_stream" default="RS2_STREAM_COLOR" />
             <arg name="pointcloud_texture_index" default="0" />
             <arg name="allow_no_texture_points" default="false" />
@@ -112,7 +117,7 @@
 
             <!-- 只关心 60cm 内（D405 理想范围 7–50cm），顺便裁掉远处噪声 -->
             <!-- 单位是米；如果场景更近，可以改成 0.4 -->
-            <arg name="clip_distance" default="0.4" />
+            <arg name="clip_distance" default="1.2" />
 
             <!-- 曝光 / 增益：先交给自动曝光，后期用 rqt_reconfigure 再精调 -->
             <arg name="stereo_module/exposure/1" default="0" />
@@ -124,14 +129,16 @@
             <arg name="publish_tf" default="true" />
             <arg name="tf_publish_rate" default="0" />
         </include>
+    </group>
 
+    <group if="$(arg enable_camera_right)">
         <include file="$(find realsense2_camera)/launch/rs_camera.launch">
             <arg name="camera" value="realsense_right" />
             <arg name="usb_port_id" value="$(arg camera_right_usb_port)" />
             <arg name="tf_prefix" value="realsense_right" />
 
             <!-- 深度：近距离精度优先，使用 848x480@30 -->
-            <arg name="enable_depth" default="true" />
+            <arg name="enable_depth" default="false" />
             <arg name="depth_width" default="848" />
             <arg name="depth_height" default="480" />
             <arg name="depth_fps" default="30" />
@@ -159,7 +166,7 @@
             <arg name="confidence_fps" default="-1" />
 
             <!-- 点云与深度对齐：腕部相机一般要 RGB-D 配合，建议全部打开 -->
-            <arg name="enable_pointcloud" default="true" />
+            <arg name="enable_pointcloud" default="false" />
             <arg name="pointcloud_texture_stream" default="RS2_STREAM_COLOR" />
             <arg name="pointcloud_texture_index" default="0" />
             <arg name="allow_no_texture_points" default="false" />
@@ -175,7 +182,7 @@
 
             <!-- 只关心 60cm 内（D405 理想范围 7–50cm），顺便裁掉远处噪声 -->
             <!-- 单位是米；如果场景更近，可以改成 0.4 -->
-            <arg name="clip_distance" default="0.4" />
+            <arg name="clip_distance" default="1.2" />
 
             <!-- 曝光 / 增益：先交给自动曝光，后期用 rqt_reconfigure 再精调 -->
             <arg name="stereo_module/exposure/1" default="0" />
@@ -187,13 +194,15 @@
             <arg name="publish_tf" default="true" />
             <arg name="tf_publish_rate" default="0" />
         </include>
+    </group>
 
+    <group if="$(arg enable_camera_top)">
         <include file="$(find realsense2_camera)/launch/rs_camera.launch">
             <arg name="camera" value="realsense_top" />
             <arg name="usb_port_id" value="$(arg camera_top_usb_port)" />
 
             <!-- 开启深度，使用 D435 推荐深度分辨率 848x480@30 -->
-            <arg name="enable_depth" default="true" />
+            <arg name="enable_depth" default="false" />
             <arg name="depth_width" default="848" />
             <arg name="depth_height" default="480" />
             <arg name="depth_fps" default="30" />
@@ -217,7 +226,7 @@
             <arg name="align_depth" default="true" />
 
             <!-- 点云 -->
-            <arg name="enable_pointcloud" default="true" />
+            <arg name="enable_pointcloud" default="false" />
             <arg name="pointcloud_texture_stream" default="RS2_STREAM_COLOR" />
             <arg name="pointcloud_texture_index" default="0" />
             <arg name="allow_no_texture_points" default="false" />
@@ -260,5 +269,12 @@
                 <arg name="enable_default_tf" value="false" />
             </include>
         </group>
+    </group>
+
+    <group if="$(arg enable_lidar)">
+        <include file="$(find rplidar_ros)/launch/rplidar_c1.launch">
+            <arg name="serial_port" value="$(arg lidar_port)" />
+            <arg name="frame_id" value="arm_left/base_link"/>
+        </include>
     </group>
 </launch>
