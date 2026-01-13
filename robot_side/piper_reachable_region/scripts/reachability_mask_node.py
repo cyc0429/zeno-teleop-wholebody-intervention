@@ -61,51 +61,8 @@ from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs import point_cloud2
 from std_msgs.msg import Header
 
-
-class ReachabilityMLP(torch.nn.Module):
-    """
-    Lightweight MLP for reachability prediction.
-    Must match the architecture used in training.
-    """
-    
-    def __init__(self, input_dim=3, hidden_dim=128, num_layers=4, output_manip=True):
-        super(ReachabilityMLP, self).__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
-        self.output_manip = output_manip
-        
-        # Shared backbone
-        layers = []
-        layers.append(torch.nn.Linear(input_dim, hidden_dim))
-        layers.append(torch.nn.ReLU())
-        for _ in range(num_layers - 1):
-            layers.append(torch.nn.Linear(hidden_dim, hidden_dim))
-            layers.append(torch.nn.ReLU())
-        self.backbone = torch.nn.Sequential(*layers)
-        
-        # Reachability head
-        self.reach_head = torch.nn.Sequential(
-            torch.nn.Linear(hidden_dim, hidden_dim // 2),
-            torch.nn.ReLU(),
-            torch.nn.Linear(hidden_dim // 2, 1),
-            torch.nn.Sigmoid()
-        )
-        
-        # Manipulability head
-        if self.output_manip:
-            self.manip_head = torch.nn.Sequential(
-                torch.nn.Linear(hidden_dim, hidden_dim // 2),
-                torch.nn.ReLU(),
-                torch.nn.Linear(hidden_dim // 2, 1),
-                torch.nn.Softplus()
-            )
-    
-    def forward(self, xyz):
-        x = self.backbone(xyz)
-        p_reach = self.reach_head(x)
-        m_pred = self.manip_head(x) if self.output_manip else None
-        return p_reach, m_pred
+# Import shared network definition
+from network import ReachabilityMLP
 
 
 class ReachabilityMaskNode:
