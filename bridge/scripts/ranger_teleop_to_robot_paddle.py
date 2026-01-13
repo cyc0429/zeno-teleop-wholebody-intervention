@@ -114,12 +114,12 @@ class RangerTeleopToRobot:
         if abs(cmd_vel.angular.z) > 1e-6:  # Check if z cmd is non-zero (with small epsilon for floating point)
             cmd_vel.linear.y = 0.0
 
-        rospy.loginfo(
-            "Publishing cmd_vel: linear.x=%.3f, linear.y=%.3f, angular.z=%.3f",
-            cmd_vel.linear.x,
-            cmd_vel.linear.y,
-            cmd_vel.angular.z,
-        )
+        # rospy.loginfo(
+        #     "Publishing cmd_vel: linear.x=%.3f, linear.y=%.3f, angular.z=%.3f",
+        #     cmd_vel.linear.x,
+        #     cmd_vel.linear.y,
+        #     cmd_vel.angular.z,
+        # )
 
         self.cmd_vel_pub.publish(cmd_vel)
 
