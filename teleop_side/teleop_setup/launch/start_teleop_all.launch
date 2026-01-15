@@ -25,30 +25,15 @@
 		</include>
 		<!-- Use default haptic.yaml when haptic is disabled -->
 		<include file="$(find dm_controllers)/launch/load_dm_hw.launch" unless="$(arg enable_paddle_haptic)" />
-
-		<group if="$(arg enable_paddle_haptic)">
-			<node name="paddle_haptic_client" pkg="teleop_setup" type="paddle_haptic_client.py" output="screen">
-				<rosparam file="$(find teleop_setup)/config/paddle_haptic.yaml" command="load" />
-			</node>
-		</group>
 	</group>
 
 	<!-- Launch dual-arm teleop node -->
 	<group if="$(arg enable_dual_arm)">
-		<include file="$(find piper_ctrl)/launch/piper_dual_teleop.launch">
-			<!-- <arg name="left_can_port" value="$(arg left_can_port)" />
-			<arg name="right_can_port" value="$(arg right_can_port)" />
-			<arg name="robot_prefix_left" value="/robot/arm_left/" />
-			<arg name="robot_prefix_right" value="/robot/arm_right/" />
-			<arg name="teleop_prefix_left" value="/teleop/arm_left/" />
-			<arg name="teleop_prefix_right" value="/teleop/arm_right/" /> -->
-		</include>
+		<include file="$(find piper_ctrl)/launch/piper_dual_teleop.launch" />
 	</group>
 
 	<!-- Launch gravity compensation node -->
 	<group if="$(arg enable_gravity_compensation)">
-		<node name="piper_gravity_compensation_node" pkg="piper_ctrl" type="piper_gravity_compensation_node.py"
-			output="screen">
-		</node>
+		<node name="piper_gravity_compensation_node" pkg="piper_ctrl" type="piper_gravity_compensation_node.py" output="screen" />
 	</group>
 </launch>
