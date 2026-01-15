@@ -6,8 +6,10 @@ ROS Node for Manipulability-Based Base Control
 This ROS node:
   1. Subscribes to /robot/arm_left/joint_states_single and /robot/arm_right/joint_states_single
   2. Computes manipulability in real time using trained MLP model
-  3. If manipulability is smaller than a threshold, computes the composed Intent direction (both arms)
-     and maps it into base velocity command
+  3. If manipulability is smaller than a threshold, computes base velocity command by fusing:
+     - End-effector direction (direction from base to EE)
+     - Gradient direction (direction that increases manipulability from the network)
+  4. Maps the fused intent direction into base velocity command
 
 Configuration via ROS parameters:
   ~model_path: Path to trained PyTorch model (model.pth)
@@ -17,6 +19,8 @@ Configuration via ROS parameters:
   ~base_vel_topic: Topic for publishing base velocity commands (default: /cmd_vel)
   ~max_linear_vel: Maximum linear velocity (m/s)
   ~max_angular_vel: Maximum angular velocity (rad/s)
+  ~target_weight: Weight for end-effector direction in fusion (default: 0.5)
+  ~gradient_weight: Weight for gradient direction in fusion (default: 0.5)
   ~device: PyTorch device ('cpu' or 'cuda')
 
 Usage:
@@ -63,6 +67,8 @@ class ManipulabilityBaseControlNode:
         self.max_linear_vel = rospy.get_param('~max_linear_vel', 0.3)
         self.max_angular_vel = rospy.get_param('~max_angular_vel', 0.5)
         self.stretch_radius = rospy.get_param('~stretch_radius', 0.3)  # Minimum distance from base to consider arm stretched
+        self.target_weight = rospy.get_param('~target_weight', 0.5)  # Weight for end-effector direction
+        self.gradient_weight = rospy.get_param('~gradient_weight', 0.5)  # Weight for gradient direction
         device_str = rospy.get_param('~device', 'cpu')
         
         # End-effector link names
@@ -78,6 +84,8 @@ class ManipulabilityBaseControlNode:
         rospy.loginfo(f"Max linear velocity: {self.max_linear_vel} m/s")
         rospy.loginfo(f"Max angular velocity: {self.max_angular_vel} rad/s")
         rospy.loginfo(f"Stretch radius threshold: {self.stretch_radius} m")
+        rospy.loginfo(f"Target weight (EE direction): {self.target_weight}")
+        rospy.loginfo(f"Gradient weight (manipulability gradient): {self.gradient_weight}")
         
         # Setup device
         if device_str == 'auto':
@@ -295,6 +303,71 @@ class ManipulabilityBaseControlNode:
             rospy.logwarn(f"Failed to compute manipulability from model: {e}")
             return 0.0
     
+    def compute_gradient_direction(self, ee_pos):
+        """
+        Compute gradient ascent direction of manipulability prediction network at current pose.
+        The gradient points in the direction that increases manipulability.
+        
+        Args:
+            ee_pos: (3,) array of end-effector position [x, y, z] in base frame
+            
+        Returns:
+            gradient_dir_xy: (2,) array of gradient direction [x, y] projected to xy plane (normalized)
+                           Returns [0, 0] if gradient computation fails
+        """
+        try:
+            # Normalize position
+            ee_pos_norm = self.normalize_xyz(ee_pos.reshape(1, -1))
+            
+            # Create tensor with gradient enabled
+            ee_pos_tensor = torch.from_numpy(ee_pos_norm).float().to(self.device)
+            ee_pos_tensor.requires_grad_(True)
+            
+            # Forward pass through model
+            p_reach, m_pred = self.model(ee_pos_tensor)
+            
+            if m_pred is None:
+                return np.array([0.0, 0.0])
+            
+            # Denormalize manipulability for gradient computation
+            # We want to maximize manipulability, so we compute gradient of denormalized value
+            manip_range = self.manip_max - self.manip_min
+            m_denorm = self.manip_min + m_pred.squeeze() * manip_range
+            
+            # Backward pass to compute gradient
+            m_denorm.backward()
+            
+            # Get gradient (points in direction of increasing manipulability)
+            grad = ee_pos_tensor.grad[0].cpu().numpy()  # (3,) gradient in normalized space
+            
+            # Denormalize gradient to base frame coordinates
+            # The gradient is with respect to normalized input, so we need to scale it
+            xyz_half_size = (self.xyz_max - self.xyz_min) / 2
+            grad_denorm = grad / (xyz_half_size + 1e-8)
+            
+            # # Project to xy plane (ignore z component)
+            # gradient_dir_xy = grad_denorm[:2]
+            
+            # # Normalize direction
+            # norm = np.linalg.norm(gradient_dir_xy)
+            # rospy.loginfo(f"gradient norm: {norm:.4f}")
+            # if norm > 1e-6:
+            #     gradient_dir_xy = gradient_dir_xy / norm
+            # else:
+            #     gradient_dir_xy = np.array([0.0, 0.0])
+            
+            norm = np.linalg.norm(grad_denorm)
+            if norm > 1e-6:
+                gradient_dir = grad_denorm / norm
+            else:
+                gradient_dir = np.array([0.0, 0.0, 0.0])
+            
+            return -gradient_dir[:2]
+            
+        except Exception as e:
+            rospy.logwarn(f"Failed to compute gradient direction: {e}")
+            return np.array([0.0, 0.0])
+    
     def is_arm_stretched(self, ee_pos):
         """
         Check if an arm is stretched out based on distance from base.
@@ -386,6 +459,7 @@ class ManipulabilityBaseControlNode:
     def compute_single_arm_base_vel(self, ee_pos, manipulability, is_stretched):
         """
         Compute base velocity command for a single arm based on its end-effector position and manipulability.
+        Fuses end-effector direction with gradient direction of manipulability network.
         
         Args:
             ee_pos: (3,) array of end-effector position [x, y, z] in base frame
@@ -401,15 +475,31 @@ class ManipulabilityBaseControlNode:
         if not is_stretched or manipulability >= self.manip_threshold:
             return cmd_vel
         
-        # Compute intent direction: direction from base to end-effector (projected to xy plane)
-        intent_dir_xy = ee_pos[:2]
+        # Compute end-effector direction: direction from base to end-effector (projected to xy plane)
+        ee_dir_xy = ee_pos[:2]
         
-        # Normalize direction
-        norm = np.linalg.norm(intent_dir_xy)
-        if norm > 1e-6:
-            intent_dir_xy = intent_dir_xy / norm
+        # Normalize EE direction
+        ee_norm = np.linalg.norm(ee_dir_xy)
+        if ee_norm > 1e-6:
+            ee_dir_xy = ee_dir_xy / ee_norm
         else:
             # End-effector is at origin or very close, return zero velocity
+            return cmd_vel
+        
+        # Compute gradient direction (direction that increases manipulability)
+        gradient_dir_xy = self.compute_gradient_direction(ee_pos)
+        
+        # Fuse directions: intent_dir = ee_direction * target_weight + gradient_direction * gradient_weight
+        intent_dir_xy = self.target_weight * ee_dir_xy + self.gradient_weight * gradient_dir_xy
+        
+        rospy.loginfo(f"ee dir: [{ee_dir_xy[0]:.4f}, {ee_dir_xy[1]:.4f}], grad dir: [{gradient_dir_xy[0]:.4f}, {gradient_dir_xy[1]:.4f}]")
+        
+        # Normalize fused direction
+        intent_norm = np.linalg.norm(intent_dir_xy)
+        if intent_norm > 1e-6:
+            intent_dir_xy = intent_dir_xy / intent_norm
+        else:
+            # Fused direction is zero, return zero velocity
             return cmd_vel
         
         # Scale velocity based on manipulability deficit
@@ -493,7 +583,7 @@ class ManipulabilityBaseControlNode:
             manip_left = self.compute_manipulability_from_model(ee_pos_left) if left_stretched else self.manip_threshold
             manip_right = self.compute_manipulability_from_model(ee_pos_right) if right_stretched else self.manip_threshold
             
-            rospy.loginfo(f"Manipulability - Left: {manip_left:.4f} (stretched: {left_stretched}), Right: {manip_right:.4f} (stretched: {right_stretched})")
+            # rospy.loginfo(f"Manipulability - Left: {manip_left:.4f} (stretched: {left_stretched}), Right: {manip_right:.4f} (stretched: {right_stretched})")
             
             # Only proceed if at least one arm is stretched out
             if not (left_stretched or right_stretched):

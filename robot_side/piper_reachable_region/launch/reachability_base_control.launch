@@ -27,10 +27,12 @@ Parameters (with defaults):
      <arg name="model_path" default="$(find piper_reachable_region)/model/model.pth" doc="Path to trained model.pth file" />
      <arg name="config_path" default="$(find piper_reachable_region)/model/config.json" doc="Path to config.json file" />
      <arg name="urdf_path" default="$(find piper_description)/urdf/piper_description.urdf" doc="Path to urdf file" />
-     <arg name="manip_threshold" default="0.20" />
+     <arg name="manip_threshold" default="0.175" />
      <arg name="base_vel_topic" default="/robot/intent_vel" />
      <arg name="max_linear_vel" default="0.15" />
-     <arg name="stretch_radius" default="0.55" />
+     <arg name="stretch_radius" default="0.6" />
+     <arg name="target_weight" default="1.0" />
+     <arg name="gradient_weight" default="0.2" />
      <arg name="device" default="cuda" />
      <arg name="log_level" default="debug" doc="ROS node log level: debug, info, warn, error, fatal" />
 
@@ -46,6 +48,8 @@ Parameters (with defaults):
           <param name="base_vel_topic" value="$(arg base_vel_topic)" />
           <param name="max_linear_vel" value="$(arg max_linear_vel)" />
           <param name="stretch_radius" value="$(arg stretch_radius)" />
+          <param name="target_weight" value="$(arg target_weight)" />
+          <param name="gradient_weight" value="$(arg gradient_weight)" />
           
           <!-- Device Configuration -->
           <param name="device" value="$(arg device)" />

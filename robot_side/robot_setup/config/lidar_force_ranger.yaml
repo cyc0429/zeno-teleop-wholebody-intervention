@@ -1,0 +1,16 @@
+# Topic configurations
+scan_topic: "/scan"
+repulsive_force_vector_topic: "/repulsive_force_vector"
+repulsive_force_marker_topic: "/repulsive_force_marker"
+weighted_pointcloud_topic: "/weighted_pointcloud"
+range_circles_topic: "/range_circles"
+frame_marker_topic: "/laser_frame_marker"
+
+# Force field parameters
+r_min: 0.40          # Minimum distance threshold (m)
+r_far: 0.50          # Far distance threshold (m)
+weight_max: 1.0    # Maximum weight for force calculation
+delta: 0.01         # Smoothstep transition range (m)
+
+# Filter parameters
+filter_alpha: 0.1   # Low-pass filter alpha (0-1, smaller = more smoothing)
