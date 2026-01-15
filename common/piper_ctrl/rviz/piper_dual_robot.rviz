@@ -26,7 +26,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: PointCloud2
+    SyncSource: LeftCloud
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -489,7 +489,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: arm_left/base_link
+    Fixed Frame: ranger
     Frame Rate: 30
   Name: root
   Tools:
@@ -513,7 +513,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.8433995246887207
+      Distance: 2.8678417205810547
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -521,17 +521,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.037541329860687256
-        Y: -0.2736603915691376
-        Z: 0.12721765041351318
+        X: 0.07271625101566315
+        Y: 0.007154983468353748
+        Z: 0.1318313032388687
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.4997961521148682
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
-      Yaw: 3.1135432720184326
+      Yaw: 3.148543357849121
     Saved: ~
 Window Geometry:
   Displays:

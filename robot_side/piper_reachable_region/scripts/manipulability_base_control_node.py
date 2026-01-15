@@ -305,7 +305,7 @@ class ManipulabilityBaseControlNode:
     
     def compute_gradient_direction(self, ee_pos):
         """
-        Compute gradient descent direction of manipulability prediction network at current pose.
+        Compute gradient ascent direction of manipulability prediction network at current pose.
         The gradient points in the direction that increases manipulability.
         
         Args:
@@ -345,17 +345,24 @@ class ManipulabilityBaseControlNode:
             xyz_half_size = (self.xyz_max - self.xyz_min) / 2
             grad_denorm = grad / (xyz_half_size + 1e-8)
             
-            # Project to xy plane (ignore z component)
-            gradient_dir_xy = grad_denorm[:2]
+            # # Project to xy plane (ignore z component)
+            # gradient_dir_xy = grad_denorm[:2]
             
-            # Normalize direction
-            norm = np.linalg.norm(gradient_dir_xy)
+            # # Normalize direction
+            # norm = np.linalg.norm(gradient_dir_xy)
+            # rospy.loginfo(f"gradient norm: {norm:.4f}")
+            # if norm > 1e-6:
+            #     gradient_dir_xy = gradient_dir_xy / norm
+            # else:
+            #     gradient_dir_xy = np.array([0.0, 0.0])
+            
+            norm = np.linalg.norm(grad_denorm)
             if norm > 1e-6:
-                gradient_dir_xy = gradient_dir_xy / norm
+                gradient_dir = grad_denorm / norm
             else:
-                gradient_dir_xy = np.array([0.0, 0.0])
+                gradient_dir = np.array([0.0, 0.0, 0.0])
             
-            return gradient_dir_xy
+            return -gradient_dir[:2]
             
         except Exception as e:
             rospy.logwarn(f"Failed to compute gradient direction: {e}")
@@ -485,6 +492,8 @@ class ManipulabilityBaseControlNode:
         # Fuse directions: intent_dir = ee_direction * target_weight + gradient_direction * gradient_weight
         intent_dir_xy = self.target_weight * ee_dir_xy + self.gradient_weight * gradient_dir_xy
         
+        rospy.loginfo(f"ee dir: [{ee_dir_xy[0]:.4f}, {ee_dir_xy[1]:.4f}], grad dir: [{gradient_dir_xy[0]:.4f}, {gradient_dir_xy[1]:.4f}]")
+        
         # Normalize fused direction
         intent_norm = np.linalg.norm(intent_dir_xy)
         if intent_norm > 1e-6:
@@ -574,7 +583,7 @@ class ManipulabilityBaseControlNode:
             manip_left = self.compute_manipulability_from_model(ee_pos_left) if left_stretched else self.manip_threshold
             manip_right = self.compute_manipulability_from_model(ee_pos_right) if right_stretched else self.manip_threshold
             
-            rospy.loginfo(f"Manipulability - Left: {manip_left:.4f} (stretched: {left_stretched}), Right: {manip_right:.4f} (stretched: {right_stretched})")
+            # rospy.loginfo(f"Manipulability - Left: {manip_left:.4f} (stretched: {left_stretched}), Right: {manip_right:.4f} (stretched: {right_stretched})")
             
             # Only proceed if at least one arm is stretched out
             if not (left_stretched or right_stretched):

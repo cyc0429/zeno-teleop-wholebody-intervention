@@ -35,9 +35,15 @@
 
     <arg name="enable_lidar" default="true" />
     <arg name="enable_reachability" default="true" />
+    <arg name="enable_reachability_ctrl" default="true" />
+    <arg name="enable_lidar_force" default="true" />
 
     <!-- Setup robot_description for joint_state_publisher_gui if needed -->
     <param name="robot_description" textfile="$(find piper_description)/urdf/piper_description.xacro" />
+
+    <!-- Static TF transforms -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="arm_left_to_ranger_tf" args="-0.29 -0.26 0 0 0 0 1 arm_left/dummy_link ranger" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="ranger_to_laser_tf" args="0.4 0 0 0 0 0 1 ranger laser" />
 
     <!-- Launch ranger control node -->
     <group if="$(arg enable_ranger)">
@@ -55,9 +61,7 @@
     <!-- Launch paddle2ranger node -->
     <group if="$(arg enable_paddle2ranger)">
         <rosparam file="$(find bridge)/config/paddle.yaml" command="load" ns="ranger_teleop_to_robot_paddle_node" />
-        <node name="ranger_teleop_to_robot_paddle_node" pkg="bridge" type="ranger_teleop_to_robot_paddle.py"
-            output="screen">
-        </node>
+        <node name="ranger_teleop_to_robot_paddle_node" pkg="bridge" type="ranger_teleop_to_robot_paddle.py" output="screen" />
     </group>
 
     <!-- Launch dual-arm control node -->
@@ -272,12 +276,21 @@
     </group>
 
     <group if="$(arg enable_lidar)">
-        <include file="$(find rplidar_ros)/launch/rplidar_c1.launch">
-        </include>
+        <include file="$(find rplidar_ros)/launch/rplidar_c1.launch" />
     </group>
 
     <group if="$(arg enable_reachability)">
-        <include file="$(find piper_reachable_region)/launch/reachability_mask.launch">
-        </include>
+        <include file="$(find piper_reachable_region)/launch/reachability_mask.launch" />
     </group>
+
+    <group if="$(arg enable_reachability_ctrl)">
+        <include file="$(find piper_reachable_region)/launch/reachability_base_control.launch" />
+    </group>
+
+    <group if="$(arg enable_lidar_force)">
+        <node name="lidar_force_node" pkg="robot_setup" type="lidar_force_ranger.py" output="screen">
+            <rosparam file="$(find robot_setup)/config/lidar_force_ranger.yaml" command="load" />
+        </node>
+    </group>
+
 </launch>
