@@ -26,33 +26,31 @@ from threading import Lock
 from sensor_msgs.msg import JointState, CompressedImage
 from cv_bridge import CvBridge
 from einops import rearrange
-import torchvision.transforms as transforms
 
 # Add act directory to path to import modules
-act_dir = os.path.join(os.path.dirname(__file__), '../../../../../../act')
-sys.path.insert(0, act_dir)
+# act_dir = os.path.join('/home/zeno/piper_ros/act')
+# sys.path.insert(0, act_dir)
 
 from constants import DT
 from policy import ACTPolicy, CNNMLPPolicy
-from utils import pad_qpos, set_seed
+from utils import set_seed
 
 
 class ACTEvalNode:
     def __init__(self):
-        rospy.init_node('act_eval_node', anonymous=True)
-        
         # Get ROS parameters (same as imitate_episodes.py)
-        self.ckpt_dir = rospy.get_param('~ckpt_dir')
-        self.task_name = rospy.get_param('~task_name')
+        self.ckpt_dir = rospy.get_param('~ckpt_dir', '/home/zeno/piper_ros/act/ckpt/TriPilot-FF-P1-TabletopSort_kl10_cs30_bs16_lr1e-5_raw')
+        self.task_name = rospy.get_param('~task_name', 'TriPilot-FF-P1-TabletopSort')
         self.policy_class = rospy.get_param('~policy_class', 'ACT')
-        self.use_qtor = rospy.get_param('~use_qtor', False)
-        self.use_lidar = rospy.get_param('~use_lidar', False)
-        self.mix = rospy.get_param('~mix', False)
+        # self.use_qtor = rospy.get_param('~use_qtor', True)
+        # self.use_lidar = rospy.get_param('~use_lidar', False)
+        # self.mix = rospy.get_param('~mix', False)
         self.temporal_agg = rospy.get_param('~temporal_agg', False)
         self.seed = rospy.get_param('~seed', 1000)
+        self.show_images = rospy.get_param('~show_images', True)  # Enable image display by default
         
         # ACT-specific parameters
-        self.chunk_size = rospy.get_param('~chunk_size', 100)
+        self.chunk_size = rospy.get_param('~chunk_size', 30)
         self.kl_weight = rospy.get_param('~kl_weight', 10)
         self.hidden_dim = rospy.get_param('~hidden_dim', 512)
         self.dim_feedforward = rospy.get_param('~dim_feedforward', 3200)
@@ -67,7 +65,7 @@ class ACTEvalNode:
             task_config = REAL_TASK_CONFIGS[self.task_name]
         
         self.camera_names = task_config['camera_names']
-        self.state_dim = rospy.get_param('~state_dim', 17)
+        self.state_dim = rospy.get_param('~state_dim', 14)
         
         # Fixed parameters
         lr_backbone = 1e-5
@@ -89,7 +87,7 @@ class ACTEvalNode:
                 'nheads': nheads,
                 'camera_names': self.camera_names,
                 'state_dim': self.state_dim,
-                'use_lidar': self.use_lidar,
+                # 'use_lidar': self.use_lidar,
             }
         elif self.policy_class == 'CNNMLP':
             policy_config = {
@@ -117,14 +115,25 @@ class ACTEvalNode:
         with open(stats_path, 'rb') as f:
             self.stats = pickle.load(f)
         
-        # Pad stats if needed (for backward compatibility)
-        self._pad_stats()
+        # Verify stats shapes and add debug info
+        rospy.loginfo(f"Loaded normalization stats:")
+        rospy.loginfo(f"  qpos_mean shape: {self.stats['qpos_mean'].shape}, mean: {self.stats['qpos_mean']}")
+        rospy.loginfo(f"  qpos_std shape: {self.stats['qpos_std'].shape}, std: {self.stats['qpos_std']}")
+        rospy.loginfo(f"  action_mean shape: {self.stats['action_mean'].shape}, mean: {self.stats['action_mean']}")
+        rospy.loginfo(f"  action_std shape: {self.stats['action_std'].shape}, std: {self.stats['action_std']}")
+        
+        # Ensure stats are numpy arrays with correct shape
+        for key in ['qpos_mean', 'qpos_std', 'action_mean', 'action_std']:
+            if not isinstance(self.stats[key], np.ndarray):
+                self.stats[key] = np.array(self.stats[key])
+            # Ensure 1D array
+            if self.stats[key].ndim == 0:
+                self.stats[key] = self.stats[key].reshape(1)
+            elif self.stats[key].ndim > 1:
+                self.stats[key] = self.stats[key].flatten()
         
         # Image preprocessing
-        self.normalize = transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225]
-        )
+        # Note: Do NOT normalize here - ACTPolicy already does ImageNet normalization internally
         self.bridge = CvBridge()
         
         # Data storage with locks
@@ -132,6 +141,7 @@ class ACTEvalNode:
         self.joint_states_left = None
         self.joint_states_right = None
         self.images = {cam: None for cam in self.camera_names}
+        self.images_bgr = {cam: None for cam in self.camera_names}  # Store BGR for display
         self.qtor_left = None
         self.qtor_right = None
         self.lidar_scan = None
@@ -143,6 +153,7 @@ class ACTEvalNode:
             self.all_time_actions = torch.zeros([10000, 10000 + self.num_queries, self.state_dim]).cuda()
         self.timestep = 0
         self.all_actions = None
+        self.action_index = 0  # Index within current action chunk
         
         # Publishers
         self.pub_left = rospy.Publisher('/robot/arm_left/act_joint_cmd', JointState, queue_size=1)
@@ -169,10 +180,10 @@ class ACTEvalNode:
         rospy.loginfo("ACT Eval Node initialized")
         rospy.loginfo(f"Task: {self.task_name}, Policy: {self.policy_class}")
         rospy.loginfo(f"Cameras: {self.camera_names}")
+        rospy.loginfo(f"Image display: {self.show_images}")
         
-        # Control loop timer
-        self.control_rate = rospy.Rate(1.0 / 10)  # Match simulation DT
-        self.control_timer = rospy.Timer(self.control_rate, self.control_loop)
+        # Control loop timer (10 Hz = 0.1 seconds period)
+        self.control_timer = rospy.Timer(rospy.Duration(0.1), self.control_loop)
     
     def _make_policy(self, policy_class, policy_config):
         if policy_class == 'ACT':
@@ -182,71 +193,82 @@ class ACTEvalNode:
         else:
             raise NotImplementedError
     
-    def _pad_stats(self):
-        """Pad stats if they are 14D (for backward compatibility)"""
-        if self.stats['qpos_mean'].shape[-1] < 17:
-            pad_size = 17 - self.stats['qpos_mean'].shape[-1]
-            qpos_mean_padding = np.zeros(pad_size)
-            qpos_std_padding = np.ones(pad_size)
-            self.stats['qpos_mean'] = np.concatenate([qpos_mean_padding, self.stats['qpos_mean']])
-            self.stats['qpos_std'] = np.concatenate([qpos_std_padding, self.stats['qpos_std']])
-            if 'example_qpos' in self.stats and self.stats['example_qpos'].shape[-1] < 17:
-                example_qpos_padding = np.zeros((*self.stats['example_qpos'].shape[:-1], pad_size))
-                self.stats['example_qpos'] = np.concatenate([example_qpos_padding, self.stats['example_qpos']], axis=-1)
-        
-        if self.stats['action_mean'].shape[-1] < 17:
-            pad_size = 17 - self.stats['action_mean'].shape[-1]
-            action_mean_padding = np.zeros(pad_size)
-            action_std_padding = np.ones(pad_size)
-            self.stats['action_mean'] = np.concatenate([action_mean_padding, self.stats['action_mean']])
-            self.stats['action_std'] = np.concatenate([action_std_padding, self.stats['action_std']])
-    
     def _pre_process(self, qpos):
         """Preprocess qpos: pad if needed, handle mix parameter, then normalize."""
-        qpos_padded = pad_qpos(qpos, target_dim=17)
-        if self.state_dim == 17:
-            if not self.mix:
-                # Set first 3 values to zeros (ignore base position)
-                if isinstance(qpos_padded, torch.Tensor):
-                    qpos_padded = qpos_padded.clone()
-                    qpos_padded[..., :3] = 0.0
-                else:
-                    qpos_padded = qpos_padded.copy()
-                    qpos_padded[..., :3] = 0.0
-        return (qpos_padded - self.stats['qpos_mean']) / self.stats['qpos_std']
+        # Ensure qpos is numpy array
+        if not isinstance(qpos, np.ndarray):
+            qpos = np.array(qpos)
+        
+        # Ensure shapes match for broadcasting
+        qpos_mean = self.stats['qpos_mean']
+        qpos_std = self.stats['qpos_std']
+        
+        # Check dimensions match
+        if qpos.shape != qpos_mean.shape:
+            rospy.logwarn_throttle(5.0, f"qpos shape mismatch: qpos={qpos.shape}, qpos_mean={qpos_mean.shape}")
+            # Try to handle mismatch by flattening or reshaping
+            if qpos.size == qpos_mean.size:
+                qpos = qpos.flatten()
+                qpos_mean = qpos_mean.flatten()
+                qpos_std = qpos_std.flatten()
+            else:
+                rospy.logerr(f"qpos size mismatch: qpos={qpos.size}, qpos_mean={qpos_mean.size}")
+                raise ValueError(f"qpos dimension mismatch: {qpos.shape} vs {qpos_mean.shape}")
+        
+        normalized = (qpos - qpos_mean) / qpos_std
+        return normalized
     
     def _post_process(self, action):
         """Post-process action: pad if needed, denormalize, then remove padding if needed."""
-        if action.shape[-1] < 17:
-            action = pad_qpos(action, target_dim=17)
-        action_denorm = action * self.stats['action_std'] + self.stats['action_mean']
-        if action_denorm.shape[-1] == 17 and self.state_dim != 17:
-            action_denorm = action_denorm[..., 3:]  # Remove first 3 padded zeros
+        # Ensure action is numpy array
+        if not isinstance(action, np.ndarray):
+            action = np.array(action)
+        
+        # Ensure shapes match for broadcasting
+        action_mean = self.stats['action_mean']
+        action_std = self.stats['action_std']
+        
+        # Check dimensions match
+        if action.shape != action_mean.shape:
+            rospy.logwarn_throttle(5.0, f"action shape mismatch: action={action.shape}, action_mean={action_mean.shape}")
+            # Try to handle mismatch by flattening or reshaping
+            if action.size == action_mean.size:
+                action = action.flatten()
+                action_mean = action_mean.flatten()
+                action_std = action_std.flatten()
+            else:
+                rospy.logerr(f"action size mismatch: action={action.size}, action_mean={action_mean.size}")
+                raise ValueError(f"action dimension mismatch: {action.shape} vs {action_mean.shape}")
+        
+        action_denorm = action * action_std + action_mean
         return action_denorm
     
     def joint_state_left_callback(self, msg):
         with self.data_lock:
             self.joint_states_left = msg
-            if self.use_qtor and len(msg.effort) >= len(msg.position):
-                self.qtor_left = np.array(msg.effort[:len(msg.position)], dtype=np.float32)
+            # if self.use_qtor and len(msg.effort) >= len(msg.position):
+            #     self.qtor_left = np.array(msg.effort[:len(msg.position)], dtype=np.float32)
     
     def joint_state_right_callback(self, msg):
         with self.data_lock:
             self.joint_states_right = msg
-            if self.use_qtor and len(msg.effort) >= len(msg.position):
-                self.qtor_right = np.array(msg.effort[:len(msg.position)], dtype=np.float32)
+            # if self.use_qtor and len(msg.effort) >= len(msg.position):
+            #     self.qtor_right = np.array(msg.effort[:len(msg.position)], dtype=np.float32)
     
     def image_callback(self, msg, cam_name):
         """Decode compressed image and store."""
         try:
             np_arr = np.frombuffer(msg.data, np.uint8)
-            img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            if img is not None:
-                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            if img_bgr is not None and img_bgr.size > 0:
+                # Convert BGR to RGB for model
+                img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
                 with self.data_lock:
                     self.images[cam_name] = img_rgb
+                    # Store BGR for display
+                    self.images_bgr[cam_name] = img_bgr
         except Exception as e:
-            rospy.logwarn_throttle(5.0, f"Error decoding image for {cam_name}: {e}")
+            rospy.logwarn_throttle(5.0, f"Error in image_callback for {cam_name}: {e}")
     
     def _get_image_tensor(self):
         """Get current images as tensor."""
@@ -268,8 +290,9 @@ class ACTEvalNode:
         
         curr_image = np.stack(curr_images, axis=0)
         curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(0)
-        curr_image = self.normalize(curr_image)
+        # Note: Do NOT normalize here - ACTPolicy.forward() already applies ImageNet normalization
         return curr_image
+    
     
     def control_loop(self, event):
         """Main control loop - runs at DT frequency."""
@@ -278,9 +301,12 @@ class ACTEvalNode:
             if self.joint_states_left is None or self.joint_states_right is None:
                 return
             
-            # Check if all images are available
-            if any(self.images[cam] is None for cam in self.camera_names):
-                return
+        # Check if all images are available
+        if any(self.images[cam] is None for cam in self.camera_names):
+            return
+        
+        # Display is handled by separate timer callback in main thread
+        # No need to call display here
         
         # Get images as tensor
         curr_image = self._get_image_tensor()
@@ -295,66 +321,29 @@ class ACTEvalNode:
             # Combine left and right qpos first
             # For dual arm: typically 7 per arm (6 joints + 1 gripper) = 14 total
             qpos_combined = np.concatenate([qpos_left_np, qpos_right_np])
-            
-            # Handle mix parameter for state_dim==17 (mobile robots)
-            # mix parameter replaces first 3 values (base position) with qvel[:3] (base velocity)
-            # Note: For mobile robots, base velocity should come from a single source (not per arm)
-            # For now, we'll use left arm's velocity for base if available, or zeros
-            if self.state_dim == 17 and self.mix:
-                qvel_left_np = np.array(self.joint_states_left.velocity, dtype=np.float32)
-                # Pad qpos_combined to 17D first (add 3 zeros for base position)
-                if len(qpos_combined) < 17:
-                    qpos_combined = pad_qpos(qpos_combined, target_dim=17)
-                # Replace first 3 values (base position) with base velocity
-                if len(qvel_left_np) >= 3:
-                    qpos_combined[:3] = qvel_left_np[:3]
-                else:
-                    # If no velocity available, set to zeros (will be handled in pre_process)
-                    qpos_combined[:3] = 0.0
-            
-            # Pad to state_dim if needed (for non-mobile or when mix=False)
-            if len(qpos_combined) < self.state_dim:
-                qpos_combined = pad_qpos(qpos_combined, target_dim=self.state_dim)
-            elif len(qpos_combined) > self.state_dim:
-                # Truncate if too long (shouldn't happen, but safety check)
-                qpos_combined = qpos_combined[:self.state_dim]
         
         # Preprocess qpos
         qpos = self._pre_process(qpos_combined)
         qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
         
         # Get qtor if needed
-        if self.use_qtor:
-            with self.data_lock:
-                if self.qtor_left is not None and self.qtor_right is not None:
-                    qtor_combined = np.concatenate([self.qtor_left, self.qtor_right])
-                    if len(qtor_combined) < self.state_dim:
-                        qtor_combined = pad_qpos(qtor_combined, target_dim=self.state_dim)
-                    elif len(qtor_combined) > self.state_dim:
-                        qtor_combined = qtor_combined[:self.state_dim]
-                    qtor = self._pre_process(qtor_combined)
-                    qtor = torch.from_numpy(qtor).float().cuda().unsqueeze(0)
-                else:
-                    qtor = torch.zeros_like(qpos)
-        else:
-            qtor = torch.zeros_like(qpos)
-        
-        # Get lidar scan if needed
-        if self.use_lidar:
-            with self.data_lock:
-                if self.lidar_scan is not None:
-                    lidar_scan = torch.from_numpy(self.lidar_scan).float().cuda().unsqueeze(0)
-                else:
-                    lidar_scan = torch.zeros((1, 1080), dtype=torch.float32).cuda()
-        else:
-            lidar_scan = torch.zeros((1, 1080), dtype=torch.float32).cuda()
+        # if self.use_qtor:
+        #     with self.data_lock:
+        #         if self.qtor_left is not None and self.qtor_right is not None:
+        #             qtor_combined = np.concatenate([self.qtor_left, self.qtor_right])
+        #             qtor = self._pre_process(qtor_combined)
+        #             qtor = torch.from_numpy(qtor).float().cuda().unsqueeze(0)
+        #         else:
+        #             qtor = torch.zeros_like(qpos)
+        # else:
+        #     qtor = torch.zeros_like(qpos)
         
         # Query policy
         with torch.inference_mode():
             if self.policy_class == "ACT":
                 if self.temporal_agg:
                     if self.timestep % self.query_frequency == 0:
-                        all_actions = self.policy(qpos, curr_image, qtor=qtor, lidar_scan=lidar_scan)
+                        all_actions = self.policy(qpos, curr_image)
                         self.all_time_actions[[self.timestep], self.timestep:self.timestep+self.num_queries] = all_actions
                     
                     actions_for_curr_step = self.all_time_actions[:, self.timestep]
@@ -372,12 +361,24 @@ class ACTEvalNode:
                     
                     self.timestep += 1
                 else:
-                    if self.timestep % self.query_frequency == 0:
-                        self.all_actions = self.policy(qpos, curr_image, qtor=qtor, lidar_scan=lidar_scan)
-                    raw_action = self.all_actions[:, self.timestep % self.query_frequency]
+                    # Non-temporal aggregation: query every query_frequency steps
+                    # Use actions sequentially within each chunk
+                    if self.action_index == 0 or self.all_actions is None:
+                        # Query new action chunk
+                        self.all_actions = self.policy(qpos, curr_image)
+                        self.action_index = 0
+                    
+                    # Use action at current index within chunk
+                    raw_action = self.all_actions[:, self.action_index]
+                    
+                    # Increment index and reset when reaching end of chunk
+                    self.action_index += 1
+                    if self.action_index >= self.query_frequency:
+                        self.action_index = 0
+                    
                     self.timestep += 1
             elif self.policy_class == "CNNMLP":
-                raw_action = self.policy(qpos, curr_image, qtor=qtor, lidar_scan=lidar_scan)
+                raw_action = self.policy(qpos, curr_image)
             else:
                 raise NotImplementedError
         
@@ -389,11 +390,7 @@ class ACTEvalNode:
         # For dual arm: typically 14D (7 per arm) or 17D (3 base + 14 arm)
         # Remove base velocities if present (first 3 values for mobile)
         action_arm_only = action
-        if len(action) == 17 and self.state_dim == 17:
-            # Remove first 3 base velocities, keep 14 arm actions
-            action_arm_only = action[3:]
         
-        # Split into left and right (assuming equal split)
         if len(action_arm_only) >= 14:
             # Dual arm: 7 joints per arm
             mid_point = len(action_arm_only) // 2
@@ -421,11 +418,23 @@ class ACTEvalNode:
 
 
 def main():
-    try:
-        node = ACTEvalNode()
-        rospy.spin()
-    except rospy.ROSInterruptException:
-        pass
+    rospy.init_node('act_eval_node', anonymous=True)
+    node = ACTEvalNode()
+    
+    rate = rospy.Rate(30)  # 30 Hz for display
+    
+    while not rospy.is_shutdown():
+        # Display images in main loop (not in callback)
+        if node.show_images:
+            with node.data_lock:
+                for cam_name in node.camera_names:
+                    if node.images_bgr[cam_name] is not None:
+                        cv2.imshow(cam_name, node.images_bgr[cam_name])
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        rate.sleep()
+    
+    cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
