@@ -112,16 +112,16 @@
             <arg name="ordered_pc" default="false" />
 
             <!-- 对齐深度到彩色 + 时间同步，方便后面做检测框投影、ICP 等 -->
-            <arg name="align_depth" default="true" />
-            <arg name="enable_sync" default="true" />
+            <arg name="align_depth" default="false" />
+            <arg name="enable_sync" default="false" />
 
             <!-- 深度后处理滤波链：降噪 + 填洞，适合近距离表面任务 -->
             <!-- decimation, spatial, temporal, hole_filling 是官方常用组合 -->
-            <arg name="filters" default="decimation,spatial,temporal,hole_filling" />
+            <!-- <arg name="filters" default="decimation,spatial,temporal,hole_filling" /> -->
 
             <!-- 只关心 60cm 内（D405 理想范围 7–50cm），顺便裁掉远处噪声 -->
             <!-- 单位是米；如果场景更近，可以改成 0.4 -->
-            <arg name="clip_distance" default="1.2" />
+            <arg name="clip_distance" default="0.5" />
 
             <!-- 曝光 / 增益：先交给自动曝光，后期用 rqt_reconfigure 再精调 -->
             <arg name="stereo_module/exposure/1" default="0" />
@@ -177,16 +177,16 @@
             <arg name="ordered_pc" default="false" />
 
             <!-- 对齐深度到彩色 + 时间同步，方便后面做检测框投影、ICP 等 -->
-            <arg name="align_depth" default="true" />
-            <arg name="enable_sync" default="true" />
+            <arg name="align_depth" default="false" />
+            <arg name="enable_sync" default="false" />
 
             <!-- 深度后处理滤波链：降噪 + 填洞，适合近距离表面任务 -->
             <!-- decimation, spatial, temporal, hole_filling 是官方常用组合 -->
-            <arg name="filters" default="decimation,spatial,temporal,hole_filling" />
+            <!-- <arg name="filters" default="decimation,spatial,temporal,hole_filling" /> -->
 
             <!-- 只关心 60cm 内（D405 理想范围 7–50cm），顺便裁掉远处噪声 -->
             <!-- 单位是米；如果场景更近，可以改成 0.4 -->
-            <arg name="clip_distance" default="1.2" />
+            <arg name="clip_distance" default="0.5" />
 
             <!-- 曝光 / 增益：先交给自动曝光，后期用 rqt_reconfigure 再精调 -->
             <arg name="stereo_module/exposure/1" default="0" />
