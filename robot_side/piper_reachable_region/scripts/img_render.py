@@ -66,11 +66,11 @@ class ImageRenderNode:
         # Get parameters
         self.model_path = rospy.get_param(
             "~model_path",
-            "/home/jeong/zeno/wholebody-teleop/teleop/src/zeno-wholebody-teleop/robot_side/piper_reachable_region/model/model.pth",
+            "/home/zeno/piper_ros/src/zeno-wholebody-teleop/robot_side/piper_reachable_region/model/model.pth",
         )
         self.config_path = rospy.get_param(
             "~config_path",
-            "/home/jeong/zeno/wholebody-teleop/teleop/src/zeno-wholebody-teleop/robot_side/piper_reachable_region/model/config.json",
+            "/home/zeno/piper_ros/src/zeno-wholebody-teleop/robot_side/piper_reachable_region/model/config.json",
         )
         self.side = rospy.get_param("~side", "right")
         self.camera_info_topic = rospy.get_param("~camera_info_topic", f"/realsense_{self.side}/color/camera_info")

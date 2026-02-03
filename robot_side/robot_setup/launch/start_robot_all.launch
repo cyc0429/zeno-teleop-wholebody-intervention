@@ -35,7 +35,7 @@
 
     <arg name="enable_lidar" default="true" />
     <arg name="enable_reachability" default="true" />
-    <arg name="enable_reachability_ctrl" default="true" />
+    <arg name="enable_reachability_ctrl" default="false" />
     <arg name="enable_lidar_force" default="true" />
 
     <!-- Setup robot_description for joint_state_publisher_gui if needed -->
@@ -84,7 +84,7 @@
 
             <!-- 彩色：D405 的 RGB 实际也是左目图像，分辨率和深度对齐，方便后处理 -->
             <arg name="enable_color" default="true" />
-            <arg name="color_width" default="848" />
+            <arg name="color_width" default="640" />
             <arg name="color_height" default="480" />
             <arg name="color_fps" default="30" />
 
@@ -112,8 +112,8 @@
             <arg name="ordered_pc" default="false" />
 
             <!-- 对齐深度到彩色 + 时间同步，方便后面做检测框投影、ICP 等 -->
-            <arg name="align_depth" default="false" />
-            <arg name="enable_sync" default="false" />
+            <arg name="align_depth" default="true" />
+            <arg name="enable_sync" default="true" />
 
             <!-- 深度后处理滤波链：降噪 + 填洞，适合近距离表面任务 -->
             <!-- decimation, spatial, temporal, hole_filling 是官方常用组合 -->
@@ -149,7 +149,7 @@
 
             <!-- 彩色：D405 的 RGB 实际也是左目图像，分辨率和深度对齐，方便后处理 -->
             <arg name="enable_color" default="true" />
-            <arg name="color_width" default="848" />
+            <arg name="color_width" default="640" />
             <arg name="color_height" default="480" />
             <arg name="color_fps" default="30" />
 
@@ -177,8 +177,8 @@
             <arg name="ordered_pc" default="false" />
 
             <!-- 对齐深度到彩色 + 时间同步，方便后面做检测框投影、ICP 等 -->
-            <arg name="align_depth" default="false" />
-            <arg name="enable_sync" default="false" />
+            <arg name="align_depth" default="true" />
+            <arg name="enable_sync" default="true" />
 
             <!-- 深度后处理滤波链：降噪 + 填洞，适合近距离表面任务 -->
             <!-- decimation, spatial, temporal, hole_filling 是官方常用组合 -->
@@ -222,7 +222,7 @@
 
             <!-- 彩色图，用 848x480@30，带宽压力小一点，方便做视觉检测 -->
             <arg name="enable_color" default="true" />
-            <arg name="color_width" default="848" />
+            <arg name="color_width" default="640" />
             <arg name="color_height" default="480" />
             <arg name="color_fps" default="30" />
 
