@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """Keyboard helper for Whole-body (Arm + Base) intervention mode switching.
 
-Controls:
-  w : Whole-body intervention (Arm->HUMAN, Base->HUMAN)
-  a : Toggle Arm intervention (POLICY <-> HUMAN)
-  b : Toggle Base intervention (POLICY <-> HUMAN)
-  p : All Policy / Auto mode (Arm->POLICY, Base->POLICY)
-  s : Print current status
-  q / Ctrl+C : Quit
+Controls (H/A/B/P/S/Q; upper or lower case):
+  H -> whole_human (Arm HUMAN, Base HUMAN)
+  P -> all_policy (Arm POLICY, Base POLICY)
+  A -> toggle_arm
+  B -> toggle_base
+  S -> print status; Q or Ctrl+C -> quit
 """
 
 from __future__ import annotations

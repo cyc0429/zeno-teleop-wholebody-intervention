@@ -129,10 +129,6 @@ source devel/setup.bash
 roslaunch robot_setup start_robot_all.launch ranger_can_port:=can0 left_can_port:=can_left right_can_port:=can_right enable_ranger:=true enable_paddle2ranger:=true enable_dual_arm:=true enable_cameras:=true enable_gravity_compensation:=true enable_lidar:=true enable_rviz:=true use_default_rviz:=false enable_handeye_tf:=true camera_left_usb_port:=2-1 camera_right_usb_port:=2-8 camera_top_usb_port:=2-2
 ```
 
-```bash
-rosrun piper_ctrl piper_gravity_compensation_node.py
-```
-
 **Parameters:**
 
 **CAN ports:**
@@ -166,6 +162,11 @@ rosrun piper_ctrl piper_gravity_compensation_node.py
 - `gripper_val_mutiple`: Gripper value multiplier (default: `2`)
 - `girpper_exist`: Whether gripper exists (default: `true`)
 
+**Intervention arbiter** (topic wiring in §4.1):
+- `enable_action_arbiter`: Run `wholebody_action_arbiter` (default: `true`)
+- `enable_arbiter_keyboard`: Open `intervention_mode_keyboard` in a separate terminal (default: `true`)
+- `arbiter_mode_switch_blend_sec`: Blend time when switching modes (default: `0.80`)
+
 **Cameras:**
 - `enable_cameras`: Enable camera nodes (default: `true`)
 - `camera_left_usb_port`: USB port ID for left camera (default: `2-1`)
@@ -175,16 +176,125 @@ rosrun piper_ctrl piper_gravity_compensation_node.py
 
 **Note:** Use command `rs-enumerate-devices` to find all connected cameras and get their USB port IDs from the `Physical Port` field. The output should contain a line like: `Physical Port: /sys/devices/pci0000:00/0000:00:14.0/usb2/2-1/2-1:1.0/video4linux/video8`. Extract the `2-1` part and use it as the `usb_port_id` parameter.
 
-## 4. Record Data
+## 4. Autonomous Inference & Intervention
+
+The stack runs **policy** and **teleop** command streams in parallel. The node `wholebody_action_arbiter` (`robot_setup/scripts/wholebody_action_arbiter.py`) chooses what the robot actually executes per **arm** and **base** (independent POLICY vs HUMAN). Topic names below match `robot_side/robot_setup/launch/start_robot_all.launch` when `enable_action_arbiter` is true; override them via node parameters if you remap.
+
+### 4.1 Topic naming (intervention, inference, teleop, arbiter)
+
+**Intervention / mode (not the same as master-arm mirror)**
+
+| Topic | Type | Role |
+|-------|------|------|
+| `/intervention/mode_cmd` | `std_msgs/String` | Commands consumed by the arbiter: `whole_human`, `all_policy`, `toggle_arm`, `toggle_base` (see `intervention_mode_keyboard.py`). |
+| `/intervention/flags` | `std_msgs/Float32MultiArray` (latched) | Arbiter state for logging / RL: `data[0]` arm (1.0 = HUMAN, 0.0 = POLICY), `data[1]` base (same). |
+
+**Teleop master arms (mirror vs haptic, takeover latch)**
+
+| Topic | Type | Role |
+|-------|------|------|
+| `/teleop/slave_follow_flag` | `std_msgs/Bool` | `true`: master tracks robot (inference-style mirror). `false`: impedance / teleop follow. Used by `piper_ctrl` master–slave logic; the keyboard node can **sync** this from arm mode when `~sync_slave_follow_flag` is true. |
+
+**Inference (policy) → arbiter inputs**
+
+| Topic | Type |
+|-------|------|
+| `/robot/arm_left/vla_joint_cmd` | `sensor_msgs/JointState` |
+| `/robot/arm_right/vla_joint_cmd` | `sensor_msgs/JointState` |
+| `/robot/base/vla_cmd_vel` | `geometry_msgs/Twist` |
+
+**Teleop → arbiter inputs**
+
+| Topic | Type |
+|-------|------|
+| `/teleop/arm_left/joint_states_single` | `sensor_msgs/JointState` |
+| `/teleop/arm_right/joint_states_single` | `sensor_msgs/JointState` |
+| `/teleop/base/cmd_vel` | `geometry_msgs/Twist` |
+
+**Arbiter → low-level robot commands**
+
+| Topic | Type |
+|-------|------|
+| `/robot/arm_left/joint_pos_cmd` | `sensor_msgs/JointState` |
+| `/robot/arm_right/joint_pos_cmd` | `sensor_msgs/JointState` |
+| `/cmd_vel` | `geometry_msgs/Twist` |
+
+`piper_dual.yaml` routes arm execution to `joint_pos_cmd` when using the arbiter path (not directly to `vla_joint_cmd`).
+
+### 4.2 Mode switching
+
+- **Who decides motion?** With the arbiter running, **arm/base POLICY vs HUMAN** is decided by `/intervention/mode_cmd` (e.g. keyboard) or your own publisher; the arbiter publishes `/intervention/flags` and the fused commands on `joint_pos_cmd` / `/cmd_vel`.
+- **Master arms on the teleop PC:** `/teleop/slave_follow_flag` still switches mirror (`true`) vs teleop impedance (`false`). Prefer driving both from the same workflow (keyboard syncs `slave_follow_flag` to arm mode by default) so behavior stays consistent.
+
+**`intervention_mode_keyboard` (`robot_setup/scripts/intervention_mode_keyboard.py`)**  
+When `start_robot_all.launch` runs with `enable_arbiter_keyboard:=true`, this node opens in a separate terminal. Click that terminal so it has focus, then use keys (upper or lower case):
+
+| Key | `mode_cmd` published | Effect |
+|-----|----------------------|--------|
+| **H** | `whole_human` | Arm → HUMAN, base → HUMAN (full teleop takeover). |
+| **P** | `all_policy` | Arm → POLICY, base → POLICY (full autonomous command path). |
+| **A** | `toggle_arm` | Flip only the **arm** mode between POLICY and HUMAN. |
+| **B** | `toggle_base` | Flip only the **base** mode between POLICY and HUMAN. |
+| **S** | — | Print current arm/base mode to the terminal (no command sent). |
+| **Q** or **Ctrl+C** | — | Exit the keyboard node. |
+
+With default `~sync_slave_follow_flag` true, the node also publishes `/teleop/slave_follow_flag`: **POLICY** arm mode → `true` (master mirrors robot), **HUMAN** arm mode → `false` (impedance teleop), aligned with the arbiter’s arm mode.
+
+Manual examples:
+
+```bash
+# Policy on both arm and base (same idea as keyboard "P")
+rostopic pub /intervention/mode_cmd std_msgs/String "all_policy"
+
+# Human on both (same idea as keyboard "H")
+rostopic pub /intervention/mode_cmd std_msgs/String "whole_human"
+```
+
+Direct toggle of **only** the master-arm mirror/haptic behavior (does not change arbiter by itself):
+
+```bash
+rostopic pub /teleop/slave_follow_flag std_msgs/Bool "data: true"   # mirror / inference-style master
+rostopic pub /teleop/slave_follow_flag std_msgs/Bool "data: false"  # teleop impedance
+```
+
+### 4.3 Match-to-Takeover (Soft Latching Safety)
+
+To prevent the robot from dropping objects or making sudden jerky movements when switching from Inference back to Intervention, a Soft Latching safety mechanism is implemented:
+
+- When switched to Intervention (False), the robot arm and gripper will instantly freeze in their current position.
+- The operator must move the teleop master arm and squeeze the gripper to match the robot's frozen physical pose.
+- Once the master and robot poses are perfectly aligned (within a small safety threshold), the lock is automatically released, and smooth teleoperation resumes.
+
+### 4.4 Running the mock policy (for testing)
+
+Use `robot_setup/scripts/mock_ai_rollout.py` to publish fake `JointState` / `Twist` on the **same policy topics** the arbiter subscrib to (`/robot/arm_left/vla_joint_cmd`, `/robot/arm_right/vla_joint_cmd`, `/robot/base/vla_cmd_vel` by default). Override with `--left-topic`, `--right-topic`, `--base-topic` if you remap.
+
+```bash
+source devel/setup.bash
+python3 "$(rospack find robot_setup)/scripts/mock_ai_rollout.py" \
+  --base-speed 0.1 \
+  --base-turn-speed 0.5 \
+  --base-duration 3.0 \
+  --hold-sec 2.0
+```
+
+## 5. Record Data
 
 ```bash
 rosbag record -O demo_001.bag --bz2 -b 4096 \
+/intervention/flags \
+/intervention/mode_cmd \
+/teleop/slave_follow_flag \
+/robot/base/vla_cmd_vel \
+/robot/arm_left/vla_joint_cmd \
+/robot/arm_right/vla_joint_cmd \
 /robot/arm_left/end_pose \
 /robot/arm_right/end_pose \
 /robot/arm_left/joint_states_single \
 /robot/arm_right/joint_states_single \
-/robot/arm_left/pos_cmd \
-/robot/arm_right/pos_cmd \
+/robot/arm_left/joint_pos_cmd \
+/robot/arm_right/joint_pos_cmd \
+/cmd_vel \
 /teleop/arm_left/end_pose \
 /teleop/arm_right/end_pose \
 /teleop/arm_left/joint_states_single \
