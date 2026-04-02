@@ -33,10 +33,14 @@
     <arg name="use_default_rviz" default="false" />
     <arg name="enable_handeye_tf" default="true" />
 
-    <arg name="enable_lidar" default="true" />
-    <arg name="enable_reachability" default="true" />
+    <arg name="enable_lidar" default="false" />
+    <arg name="enable_reachability" default="false" />
     <arg name="enable_reachability_ctrl" default="false" />
-    <arg name="enable_lidar_force" default="true" />
+    <arg name="enable_lidar_force" default="false" />
+
+    <arg name="enable_action_arbiter" default="true" />
+    <arg name="enable_arbiter_keyboard" default="true" />
+    <arg name="arbiter_mode_switch_blend_sec" default="0.80" />
 
     <!-- Setup robot_description for joint_state_publisher_gui if needed -->
     <param name="robot_description" textfile="$(find piper_description)/urdf/piper_description.xacro" />
@@ -61,7 +65,9 @@
     <!-- Launch paddle2ranger node -->
     <group if="$(arg enable_paddle2ranger)">
         <rosparam file="$(find bridge)/config/paddle.yaml" command="load" ns="ranger_teleop_to_robot_paddle_node" />
-        <node name="ranger_teleop_to_robot_paddle_node" pkg="bridge" type="ranger_teleop_to_robot_paddle.py" output="screen" />
+        <node name="ranger_teleop_to_robot_paddle_node" pkg="bridge" type="ranger_teleop_to_robot_paddle.py" output="screen">
+            <remap from="/cmd_vel" to="/teleop/base/cmd_vel" />
+        </node>
     </group>
 
     <!-- Launch dual-arm control node -->
@@ -291,6 +297,35 @@
         <node name="lidar_force_node" pkg="robot_setup" type="lidar_force_ranger.py" output="screen">
             <rosparam file="$(find robot_setup)/config/lidar_force_ranger.yaml" command="load" />
         </node>
+    </group>
+
+
+    <group if="$(arg enable_action_arbiter)">
+        
+        <node pkg="robot_setup" type="wholebody_action_arbiter.py" name="wholebody_action_arbiter" output="screen">
+            <param name="base_policy_topic" value="/robot/base/vla_cmd_vel" />
+            <param name="base_human_topic" value="/teleop/base/cmd_vel" />
+            <param name="base_output_topic" value="/cmd_vel" />
+            
+            <param name="left_human_topic" value="/teleop/arm_left/joint_states_single" />
+            <param name="right_human_topic" value="/teleop/arm_right/joint_states_single" />
+            
+            <param name="left_policy_topic" value="/robot/arm_left/vla_joint_cmd" />
+            <param name="right_policy_topic" value="/robot/arm_right/vla_joint_cmd" />
+
+            <param name="left_output_topic" value="/robot/arm_left/joint_pos_cmd" />
+            <param name="right_output_topic" value="/robot/arm_right/joint_pos_cmd" />
+            
+            <param name="publish_rate_hz" value="200.0" />
+            <param name="mode_switch_blend_sec" value="$(arg arbiter_mode_switch_blend_sec)" />
+        </node>
+
+        <node if="$(arg enable_arbiter_keyboard)" pkg="robot_setup" type="intervention_mode_keyboard.py" name="intervention_mode_keyboard" output="screen" launch-prefix="gnome-terminal -- ">
+            <param name="mode_cmd_topic" value="/intervention/mode_cmd" />
+            <param name="flags_topic" value="/intervention/flags" />
+            <param name="slave_follow_flag_topic" value="/teleop/slave_follow_flag" />
+        </node>
+        
     </group>
 
 </launch>

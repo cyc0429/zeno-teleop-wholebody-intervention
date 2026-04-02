@@ -205,3 +205,9 @@ include_directories(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
+catkin_install_python(PROGRAMS
+  scripts/keyboard_listener.py
+  scripts/base_cmd_router.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)

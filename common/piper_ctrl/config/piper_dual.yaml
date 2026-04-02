@@ -18,6 +18,7 @@ piper_ctrl_left_node:
   
   # Basic settings
   auto_enable: true
+  enforce_joint_limits: false
   
   # Gripper settings
   gripper_exist: true
@@ -26,6 +27,7 @@ piper_ctrl_left_node:
   enable_gripper_haptic: false
   gripper_range: 0.08
   gripper_reverse: false
+  shutdown_mode: "hold"
   
   # Topic names (relative to topic_prefix)
   gripper_pos_cmd_topic: "gripper_pos_cmd"
@@ -40,12 +42,11 @@ piper_ctrl_left_node:
   
   # Topic remapping (absolute paths)
   remap:
-    joint_pos_cmd_to: "/robot/arm_left/vla_joint_cmd"
-    gripper_pos_cmd_to: "/robot/arm_left/vla_joint_cmd"
-    # joint_pos_cmd_to: "/teleop/arm_left/joint_states_single"
-    # gripper_pos_cmd_to: "/teleop/arm_left/joint_states_single"
-    # joint_pos_cmd_to: "/robot/arm_left/joint_pos_cmd"
-    # gripper_pos_cmd_to: "/teleop/arm_left/joint_states_single"
+     #joint_pos_cmd_to: "/robot/arm_left/vla_joint_cmd"
+     #gripper_pos_cmd_to: "/robot/arm_left/vla_joint_cmd"
+    # Arbiter path: robot executes arbiter-selected command.
+    joint_pos_cmd_to: "/robot/arm_left/joint_pos_cmd"
+    gripper_pos_cmd_to: "/robot/arm_left/joint_pos_cmd"
 
 # Right arm robot node
 piper_ctrl_right_node:
@@ -55,7 +56,8 @@ piper_ctrl_right_node:
   
   # Basic settings
   auto_enable: true
-  
+  enforce_joint_limits: false
+
   # Gripper settings
   gripper_exist: true
   gripper_val_mutiple: 1.25
@@ -63,6 +65,7 @@ piper_ctrl_right_node:
   enable_gripper_haptic: false
   gripper_range: 0.08
   gripper_reverse: false
+  shutdown_mode: "hold"
   
   # Topic names (relative to topic_prefix)
   gripper_pos_cmd_topic: "gripper_pos_cmd"
@@ -77,12 +80,11 @@ piper_ctrl_right_node:
   
   # Topic remapping (absolute paths)
   remap:
-    joint_pos_cmd_to: "/robot/arm_right/vla_joint_cmd"
-    gripper_pos_cmd_to: "/robot/arm_right/vla_joint_cmd"
-    # joint_pos_cmd_to: "/teleop/arm_right/joint_states_single"
-    # gripper_pos_cmd_to: "/teleop/arm_right/joint_states_single"
-    # joint_pos_cmd_to: "/robot/arm_right/joint_pos_cmd"
-    # gripper_pos_cmd_to: "/teleop/arm_right/joint_states_single"
+     #joint_pos_cmd_to: "/robot/arm_right/vla_joint_cmd"
+     #gripper_pos_cmd_to: "/robot/arm_right/vla_joint_cmd"
+    # Arbiter path: robot executes arbiter-selected command.
+    joint_pos_cmd_to: "/robot/arm_right/joint_pos_cmd"
+    gripper_pos_cmd_to: "/robot/arm_right/joint_pos_cmd"
 
 # ============================================================================
 # Teleop side configuration (piper_dual_teleop.launch)
@@ -96,6 +98,9 @@ piper_teleop_left_node:
   
   # Basic settings
   auto_enable: true
+  # This teleop arm model differs from default URDF limits in this repo.
+  # Disable local clamp to avoid command distortion (e.g. joint3 clipped to <=0).
+  enforce_joint_limits: false
   
   # Gripper settings
   gripper_exist: true
@@ -104,6 +109,7 @@ piper_teleop_left_node:
   enable_gripper_haptic: true
   gripper_range: 0.08
   gripper_reverse: true
+  shutdown_mode: "reset_disable"
   
   # Topic names (relative to topic_prefix)
   gripper_pos_cmd_topic: "gripper_pos_cmd"
@@ -119,10 +125,21 @@ piper_teleop_left_node:
   # Topic remapping (absolute paths)
   remap:
     joint_pos_cmd_to: "/teleop/arm_left/joint_states_single"
-    joint_tor_cmd_to: "/robot/arm_left/joint_states_single"
-    joint_states_compensated_to: "/robot/arm_left/joint_states_compensated"
+    # joint_tor_cmd_to: "/robot/arm_left/joint_states_single"
+    # joint_states_compensated_to: "/robot/arm_left/joint_states_compensated"
     gripper_pos_cmd_to: "/teleop/arm_left/joint_states_single"
-    gripper_effort_cmd_to: "/robot/arm_left/joint_states_single"
+    # gripper_effort_cmd_to: "/robot/arm_left/joint_states_single"
+  master_slave:
+    enable: true
+    master_position_topic: "/robot/arm_left/joint_states_single"
+    master_flag_topic: "/teleop/slave_follow_flag"
+    kp_follow: [10, 10, 10, 10, 10, 10]
+    force_cmd_use_follow_kp: true
+    force_cmd_skip_joint_limit_clamp: true
+    # Safety guards to avoid startup snap-to-zero when master stream is not ready.
+    require_master_before_follow: true
+    master_position_timeout_sec: 0.5
+    follow_position_max_step_rad: 0.03
 
 # Right arm teleop node
 piper_teleop_right_node:
@@ -132,6 +149,9 @@ piper_teleop_right_node:
   
   # Basic settings
   auto_enable: true
+  # This teleop arm model differs from default URDF limits in this repo.
+  # Disable local clamp to avoid command distortion (e.g. joint3 clipped to <=0).
+  enforce_joint_limits: false
   
   # Gripper settings
   gripper_exist: true
@@ -140,6 +160,7 @@ piper_teleop_right_node:
   enable_gripper_haptic: true
   gripper_range: 0.08
   gripper_reverse: true
+  shutdown_mode: "reset_disable"
   
   # Topic names (relative to topic_prefix)
   gripper_pos_cmd_topic: "gripper_pos_cmd"
@@ -155,7 +176,18 @@ piper_teleop_right_node:
   # Topic remapping (absolute paths) 
   remap:
     joint_pos_cmd_to: "/teleop/arm_right/joint_states_single"
-    joint_tor_cmd_to: "/robot/arm_right/joint_states_single"
-    joint_states_compensated_to: "/robot/arm_right/joint_states_compensated"
+    # joint_tor_cmd_to: "/robot/arm_right/joint_states_single"
+    # joint_states_compensated_to: "/robot/arm_right/joint_states_compensated"
     gripper_pos_cmd_to: "/teleop/arm_right/joint_states_single"
-    gripper_effort_cmd_to: "/robot/arm_right/joint_states_single"
+    # gripper_effort_cmd_to: "/robot/arm_right/joint_states_single"
+  master_slave:
+    enable: true
+    master_position_topic: "/robot/arm_right/joint_states_single"
+    master_flag_topic: "/teleop/slave_follow_flag"
+    kp_follow: [10, 10, 10, 10, 10, 10]
+    force_cmd_use_follow_kp: true
+    force_cmd_skip_joint_limit_clamp: true
+    # Safety guards to avoid startup snap-to-zero when master stream is not ready.
+    require_master_before_follow: true
+    master_position_timeout_sec: 0.5
+    follow_position_max_step_rad: 0.03

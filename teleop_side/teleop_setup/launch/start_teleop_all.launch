@@ -19,13 +19,13 @@
 
 	<!-- Launch paddle (damiao) node -->
 	<group if="$(arg enable_paddle)">
-		<!-- Use external paddle_haptic.yaml when haptic is enabled -->
-		<include file="$(find dm_controllers)/launch/load_dm_hw.launch" if="$(arg enable_paddle_haptic)">
-			<arg name="haptic_config" value="$(find teleop_setup)/config/paddle_haptic.yaml" />
-		</include>
-		<!-- Use default haptic.yaml when haptic is disabled -->
-		<include file="$(find dm_controllers)/launch/load_dm_hw.launch" unless="$(arg enable_paddle_haptic)" />
-	</group>
+        <include file="$(find dm_controllers)/launch/load_dm_hw.launch" if="$(arg enable_paddle_haptic)">
+            <arg name="haptic_config" value="$(find teleop_setup)/config/paddle_haptic.yaml" />
+        </include>
+        
+        <include file="$(find dm_controllers)/launch/load_dm_hw.launch" unless="$(arg enable_paddle_haptic)">
+        </include>
+    </group>
 
 	<!-- Launch dual-arm teleop node -->
 	<group if="$(arg enable_dual_arm)">
@@ -36,4 +36,5 @@
 	<group if="$(arg enable_gravity_compensation)">
 		<node name="piper_gravity_compensation_node" pkg="piper_ctrl" type="piper_gravity_compensation_node.py" output="screen" />
 	</group>
+
 </launch>
