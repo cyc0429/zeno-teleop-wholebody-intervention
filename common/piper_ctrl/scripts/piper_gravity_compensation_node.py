@@ -18,14 +18,12 @@ from sensor_msgs.msg import JointState
 class GravityCompensationArm:
     """Gravity compensation node for a single arm"""
 
-    # ✅ 【修改点 1】：增加 prefix 参数
-    def __init__(self, arm_side: str = "left", prefix: str = "robot"):
+    def __init__(self, arm_side: str = "left"):
         if arm_side not in ["left", "right"]:
             raise ValueError("arm_side must be 'left' or 'right'")
 
         self.arm_side = arm_side
-        self.prefix = prefix  # 记录当前是 robot 还是 teleop
-        self.name_id = f"[{self.prefix}_{self.arm_side}]" # 用于优雅的日志打印
+        self.name_id = f"[robot_{self.arm_side}]"
 
         try:
             package_path = subprocess.check_output("rospack find piper_description", shell=True).strip().decode("utf-8")
@@ -66,9 +64,8 @@ class GravityCompensationArm:
 
         self.data = self.robot.model.createData()
 
-        # ✅ 【修改点 2】：把硬编码的 "robot" 换成动态的 {self.prefix}
-        sub_topic = f"/{self.prefix}/arm_{arm_side}/joint_states_single"
-        pub_topic = f"/{self.prefix}/arm_{arm_side}/joint_states_compensated"
+        sub_topic = f"/robot/arm_{arm_side}/joint_states_single"
+        pub_topic = f"/robot/arm_{arm_side}/joint_states_compensated"
 
         self.joint_state_sub = rospy.Subscriber(sub_topic, JointState, self.joint_state_callback, queue_size=1)
         self.torque_pub = rospy.Publisher(pub_topic, JointState, queue_size=1)
@@ -97,8 +94,8 @@ class GravityCompensationArm:
             gravity_torques_6dof = gravity_torques[:6]
 
             compensated_torques = np.zeros(6)
-            compensated_torques[0:3] = gravity_torques_6dof[0:3] / 6.0
-            compensated_torques[3:6] = gravity_torques_6dof[3:6] / 2.0
+            compensated_torques[0:3] = gravity_torques_6dof[0:3] / 4.0
+            compensated_torques[3:6] = gravity_torques_6dof[3:6]
 
             output_msg = JointState()
             output_msg.header.stamp = rospy.Time.now()
@@ -127,16 +124,10 @@ def main():
     try:
         check_ros_master()
         rospy.init_node("piper_gravity_compensation_node", anonymous=True)
-        rospy.loginfo("Creating independent gravity compensation nodes for all 4 arms...")
-
-        # ✅ 【修改点 3】：实例化 4 个独立的重力计算引擎！
-        robot_left = GravityCompensationArm(arm_side="left", prefix="robot")
-        robot_right = GravityCompensationArm(arm_side="right", prefix="robot")
-        
-        teleop_left = GravityCompensationArm(arm_side="left", prefix="teleop")
-        teleop_right = GravityCompensationArm(arm_side="right", prefix="teleop")
-
-        rospy.loginfo("All gravity compensation nodes initialized successfully!")
+        rospy.loginfo("Creating gravity compensation nodes for both robot arms...")
+        robot_left = GravityCompensationArm(arm_side="left")
+        robot_right = GravityCompensationArm(arm_side="right")
+        rospy.loginfo("Gravity compensation nodes initialized successfully (zihao params: j1-3 /4, j4-6 x1)")
         rospy.spin()
 
     except rospy.ROSInterruptException:
