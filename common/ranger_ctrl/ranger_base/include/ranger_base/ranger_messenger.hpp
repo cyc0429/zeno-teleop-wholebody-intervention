@@ -65,7 +65,7 @@ class RangerROSMessenger {
   void TwistCmdCallback(const geometry_msgs::Twist::ConstPtr& msg);
   void LightCmdCallback(const ranger_msgs::RangerLightCmd::ConstPtr &msg);
   double CalculateSteeringAngle(geometry_msgs::Twist msg, double& radius);
-  void UpdateOdometry(double linear, double angular, double angle, double dt);
+  void UpdateOdometry(int mode,double linear, double angular, double angle, double dt);
   double ConvertInnerAngleToCentral(double angle);
   double ConvertCentralAngleToInner(double angle);
   bool TriggerParkingService(ranger_msgs::TriggerParkMode::Request &req, ranger_msgs::TriggerParkMode::Response &res); 

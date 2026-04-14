@@ -108,8 +108,7 @@ piper_teleop_left_node:
   enable_gripper: true
   enable_gripper_haptic: true
   gripper_range: 0.08
-  gripper_reverse: true
-  shutdown_mode: "reset_disable"
+  gripper_reverse: false
   
   # Topic names (relative to topic_prefix)
   gripper_pos_cmd_topic: "gripper_pos_cmd"
@@ -159,8 +158,7 @@ piper_teleop_right_node:
   enable_gripper: true
   enable_gripper_haptic: true
   gripper_range: 0.08
-  gripper_reverse: true
-  shutdown_mode: "reset_disable"
+  gripper_reverse: false
   
   # Topic names (relative to topic_prefix)
   gripper_pos_cmd_topic: "gripper_pos_cmd"

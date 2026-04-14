@@ -204,7 +204,7 @@ namespace westonrobot {
         // update odometry
         {
             double dt = (current_time_ - last_time_).toSec();
-            UpdateOdometry(state.motion_state.linear_velocity,
+            UpdateOdometry(state.motion_mode_state.motion_mode,state.motion_state.linear_velocity,
                 state.motion_state.angular_velocity,
                 state.motion_state.steering_angle, dt);
             last_time_ = current_time_;
@@ -376,8 +376,16 @@ namespace westonrobot {
         // }
     }
 
-    void RangerROSMessenger::UpdateOdometry(double linear, double angular,
+    void RangerROSMessenger::UpdateOdometry(int mode,double linear, double angular,
         double steering_angle, double dt) {
+        motion_mode_=mode;
+        std::cerr << "[ODOM DEBUG] "
+                << "mode=" << static_cast<int>(motion_mode_)
+                << ", linear=" << linear
+                << ", angular=" << angular
+                << ", steering_angle=" << steering_angle
+                << ", steering_deg=" << steering_angle * 180.0 / M_PI
+                << std::endl;
         // update odometry calculations
         if (motion_mode_ == MotionState::MOTION_MODE_DUAL_ACKERMAN) {
             DualAckermanModel::state_type x = { position_x_, position_y_, theta_ };

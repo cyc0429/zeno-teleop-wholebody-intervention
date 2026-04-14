@@ -20,33 +20,31 @@ p:
 # =============================================================================
 mit:
   # Speed parameter, range 0-100
-    speed: 50
-  
-    # 彻底废除自身位置环和刚度、阻尼
-    # kp: [0.05, 0.1, 0.1, 0.05, 0.1, 0.1]
-    kp: [0,0,0,0,0,0]
+  speed: 50
 
+  # Proportional gain (lower values for teleop/gravity compensation mode)
+  # Can be single value or list of 6 for each joint
+  kp: [0.05, 0.1, 0.1, 0.05, 0.1, 0.1]
 
-    # Derivative gain
-    # Can be single value or list of 6 for each joint
-    kd: [0.1, 0.1, 0.01, 0.1, 0.1, 0.1]
+  # Derivative gain
+  # Can be single value or list of 6 for each joint
+  kd: [0.1, 0.1, 0.01, 0.1, 0.1, 0.1]
 
-    # Enable position control
-    enable_pos: true
+  # Enable position control
+  enable_pos: true
 
-    # Enable velocity control
-    enable_vel: false
+  # Enable velocity control
+  enable_vel: false
 
-    # Enable torque control
-    enable_tor: false
+  # Enable torque control
+  enable_tor: true
 
-    # Enable gravity compensation (key difference from piper_ctrl_mit.yaml)
-    enable_gravity: true
+  # Enable gravity compensation (key difference from piper_ctrl_mit.yaml)
+  enable_gravity: true
 
-    # Torque scale factor for gravity compensation
-    # Can be single value or list of 6 for each joint
-    torque_scale: [0.5, 0.15, 0.05, 0.5, 0.3, 0.6]
-    # torque_scale: [2, 0.8, 0.7, 0.5, 1.5, 0.6]
+  # Torque scale factor for gravity compensation
+  # Can be single value or list of 6 for each joint
+  torque_scale: [0.5, 0.15, 0.6, 0.5, 0.15, 0.6]
 
 # =============================================================================
 # Thread Rate Parameters
